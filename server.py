@@ -1,16 +1,15 @@
-# server.py
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from reader_database import DatabaseReader
-from writer_database import DatabaseWriter
+from database_reader import DatabaseReader
+from database_writer import DatabaseWriter
 import os
 
 app = Flask(__name__)
 CORS(app)
 
 # Inizializza reader e writer
-API_KEY = os.getenv('API_SECRET_KEY', 'tua_api_key_segreta')
-db_reader = DatabaseReader(base_url='http://18.156.158.53', api_key=API_KEY)
+API_KEY = os.getenv('API_SECRET_KEY', 'tua_chiave_segreta')
+db_reader = DatabaseReader()
 db_writer = DatabaseWriter()
 
 def require_api_key(f):
@@ -41,6 +40,7 @@ def health():
 @app.route('/api/partite', methods=['GET'])
 @require_api_key
 def get_partite():
+    """Recupera tutte le partite"""
     try:
         status = request.args.get('status')
         partite = db_reader.get_matches(status)
@@ -55,6 +55,7 @@ def get_partite():
 @app.route('/api/partite/<int:match_id>', methods=['GET'])
 @require_api_key
 def get_partita(match_id):
+    """Recupera dettagli di una partita specifica"""
     try:
         partita = db_reader.get_match_details(match_id)
         if partita:
@@ -67,6 +68,7 @@ def get_partita(match_id):
 @app.route('/api/squadre', methods=['GET'])
 @require_api_key
 def get_squadre():
+    """Recupera tutte le squadre"""
     try:
         squadre = db_reader.get_all_teams()
         return jsonify({
@@ -80,6 +82,7 @@ def get_squadre():
 @app.route('/api/squadre/<username>', methods=['GET'])
 @require_api_key
 def get_squadra_utente(username):
+    """Recupera la squadra di un utente"""
     try:
         squadra = db_reader.get_user_team(username)
         return jsonify({'success': True, 'data': squadra})
@@ -90,6 +93,7 @@ def get_squadra_utente(username):
 @app.route('/api/giocatori', methods=['GET'])
 @require_api_key
 def get_giocatori():
+    """Recupera tutti i giocatori"""
     try:
         giocatori = db_reader.get_all_players()
         return jsonify({
@@ -103,6 +107,7 @@ def get_giocatori():
 @app.route('/api/giocatori/search', methods=['GET'])
 @require_api_key
 def search_giocatori():
+    """Cerca giocatori per nome"""
     try:
         search_term = request.args.get('q', '')
         giocatori = db_reader.search_players(search_term)
@@ -118,6 +123,7 @@ def search_giocatori():
 @app.route('/api/scommesse/<username>', methods=['GET'])
 @require_api_key
 def get_scommesse_utente(username):
+    """Recupera le scommesse di un utente"""
     try:
         scommesse = db_reader.get_user_bets(username)
         return jsonify({'success': True, 'data': scommesse})
@@ -128,6 +134,7 @@ def get_scommesse_utente(username):
 @app.route('/api/classifica', methods=['GET'])
 @require_api_key
 def get_classifica():
+    """Recupera la classifica"""
     try:
         limit = request.args.get('limit', 50, type=int)
         classifica = db_reader.get_ranking(limit)
@@ -139,6 +146,7 @@ def get_classifica():
 @app.route('/api/squadre', methods=['POST'])
 @require_api_key
 def create_squadra():
+    """Crea una nuova squadra"""
     try:
         data = request.get_json()
         if not data.get('owner') or not data.get('name'):
@@ -162,6 +170,7 @@ def create_squadra():
 @app.route('/api/squadre/<int:team_id>', methods=['PUT'])
 @require_api_key
 def update_squadra(team_id):
+    """Aggiorna una squadra"""
     try:
         data = request.get_json()
         success = db_writer.update_team(team_id, data)
@@ -175,6 +184,7 @@ def update_squadra(team_id):
 @app.route('/api/team/<int:team_id>/giocatori', methods=['POST'])
 @require_api_key
 def add_giocatore_squadra(team_id):
+    """Aggiunge un giocatore a una squadra"""
     try:
         data = request.get_json()
         player_id = data.get('player_id')
@@ -194,6 +204,7 @@ def add_giocatore_squadra(team_id):
 @app.route('/api/scommesse', methods=['POST'])
 @require_api_key
 def create_scommessa():
+    """Crea una nuova scommessa"""
     try:
         data = request.get_json()
         required = ['username', 'match_id', 'bet_type', 'amount', 'odds']
