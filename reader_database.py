@@ -43,15 +43,17 @@ class DatabaseReader:
         result = self._get('/api/giocatori')
         return result.get('data', []) if result.get('success') else []
     
+    # database_reader.py (aggiornamento parziale)
     def get_matches(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
-        """
-        Recupera le partite dal server
-        Args:
-            status: Filtro opzionale ('scheduled', 'in_progress', 'completed')
-        """
-        params = {'status': status} if status else None
-        result = self._get('/api/partite', params=params)
-        return result.get('data', []) if result.get('success') else []
+        try:
+            query = self.client.table('matches').select('*')
+            if status:
+                query = query.eq('status', status)
+            response = query.execute()
+            return response.data if response.data else []
+        except Exception as e:
+            print(f"Errore get_matches: {e}")
+            return []
     
     def get_match_details(self, match_id: int) -> Optional[Dict[str, Any]]:
         """Recupera i dettagli completi di una partita"""
