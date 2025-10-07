@@ -50,7 +50,7 @@ class DatabaseReader:
     def get_match_details(self, match_id: int) -> Optional[Dict[str, Any]]:
         """Recupera i dettagli completi di una partita"""
         try:
-            response = self.client.table('matches').select('*').eq('id', match_id).single().execute()
+            response = self.client.table('Partite').select('*').eq('id', match_id).single().execute()
             return response.data if response.data else None
         except Exception as e:
             print(f"Errore get_match_details: {e}")
