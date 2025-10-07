@@ -38,7 +38,7 @@ class DatabaseReader:
     def get_matches(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
         """Recupera le partite dal database"""
         try:
-            query = self.client.table('matches').select('*')
+            query = self.client.table('Partite').select('*')
             if status:
                 query = query.eq('status', status)
             response = query.execute()
