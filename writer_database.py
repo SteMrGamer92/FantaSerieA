@@ -8,8 +8,8 @@ class DatabaseWriter:
     
     def __init__(self):
         """Inizializza il client Supabase"""
-        self.supabase_url = "https://your-project.supabase.co"  # Sostituisci con URL effettivo
-        self.supabase_key = "your-anon-key"  # Sostituisci con chiave anonima
+        self.supabase_url = "https://ipqxjudlxcqacgtmpkzx.supabase.co"
+        self.supabase_key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwcXhqdWRseGNxYWNndG1wa3p4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTEyNjU3OSwiZXhwIjoyMDc0NzAyNTc5fQ.9nMpSeM-p5PvnF3rwMeR_zzXXocyfzYV24vau3AcDso"
         self.client: Optional[Client] = None
         self._initialize_client()
     
@@ -44,7 +44,24 @@ class DatabaseWriter:
         except Exception as e:
             print(f"Errore create_team: {e}")
             return None
-    
+            
+    def update_team(self, team_id: int, updates: Dict[str, Any]) -> bool:
+    """
+    Aggiorna i dati di una squadra
+    """
+    try:
+        if not self.client:
+            return False
+        updates['updated_at'] = datetime.now().isoformat()
+        response = self.client.table('teams').update(updates).eq('id', team_id).execute()
+        if response.data:
+            print(f"Squadra {team_id} aggiornata con successo")
+            return True
+        return False
+    except Exception as e:
+        print(f"Errore update_team: {e}")
+        return False
+        
     def add_player_to_team(self, team_id: int, player_id: int) -> bool:
         """
         Aggiunge un giocatore a una squadra
