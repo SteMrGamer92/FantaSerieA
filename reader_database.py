@@ -8,7 +8,7 @@ class DatabaseReader:
     def __init__(self):
         """Inizializza il client Supabase"""
         self.supabase_url = os.getenv('SUPABASE_URL', 'https://ipqxjudlxcqacgtmpkzx.supabase.co')
-        self.supabase_key = os.getenv('SUPABASE_ANON_KEY', 'your-anon-key')  # Sostituisci con anon_key
+        self.supabase_key = os.getenv('SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwcXhqdWRseGNxYWNndG1wa3p4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTEyNjU3OSwiZXhwIjoyMDc0NzAyNTc5fQ.9nMpSeM-p5PvnF3rwMeR_zzXXocyfzYV24vau3AcDso')
         self.client = create_client(self.supabase_url, self.supabase_key)
     
     def get_user_team(self, username: str) -> List[Dict[str, Any]]:
@@ -73,7 +73,15 @@ class DatabaseReader:
         except Exception as e:
             print(f"Errore get_ranking: {e}")
             return []
-    
+    def get_all_teams(self) -> List[Dict[str, Any]]:
+        """Recupera tutte le squadre"""
+        try:
+            response = self.client.table('teams').select('*').execute()
+            return response.data if response.data else []
+        except Exception as e:
+            print(f"Errore get_all_teams: {e}")
+            return []
+            
     def get_player_stats(self, player_id: int) -> Optional[Dict[str, Any]]:
         """Recupera le statistiche di un singolo giocatore"""
         try:
