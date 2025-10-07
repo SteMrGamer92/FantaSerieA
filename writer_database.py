@@ -46,21 +46,21 @@ class DatabaseWriter:
             return None
             
     def update_team(self, team_id: int, updates: Dict[str, Any]) -> bool:
-    """
-    Aggiorna i dati di una squadra
-    """
-    try:
-        if not self.client:
+        """
+        Aggiorna i dati di una squadra
+        """
+        try:
+            if not self.client:
+                return False
+            updates['updated_at'] = datetime.now().isoformat()
+            response = self.client.table('teams').update(updates).eq('id', team_id).execute()
+            if response.data:
+                print(f"Squadra {team_id} aggiornata con successo")
+                return True
             return False
-        updates['updated_at'] = datetime.now().isoformat()
-        response = self.client.table('teams').update(updates).eq('id', team_id).execute()
-        if response.data:
-            print(f"Squadra {team_id} aggiornata con successo")
-            return True
-        return False
-    except Exception as e:
-        print(f"Errore update_team: {e}")
-        return False
+        except Exception as e:
+            print(f"Errore update_team: {e}")
+            return False
         
     def add_player_to_team(self, team_id: int, player_id: int) -> bool:
         """
