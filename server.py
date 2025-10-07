@@ -42,7 +42,7 @@ def health():
 def get_partite():
     """Recupera tutte le partite"""
     try:
-        status = request.args.get('status')
+        status = request.args.get('stato')
         partite = db_reader.get_matches(status)
         return jsonify({
             'success': True,
@@ -242,4 +242,5 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
