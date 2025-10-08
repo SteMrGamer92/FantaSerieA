@@ -15,12 +15,12 @@ class DatabaseReader:
         """Recupera la squadra di un utente"""
         try:
             # Recupera l'ID della squadra dell'utente
-            team_response = self.client.table('teams').select('id').eq('owner', username).execute()
+            team_response = self.client.table('Squadre').select('id').eq('owner', username).execute()
             if not team_response.data:
                 return []
             team_id = team_response.data[0].get('id')
             # Recupera i giocatori della squadra
-            players_response = self.client.table('team_players').select('players(name, role)').eq('team_id', team_id).execute()
+            players_response = self.client.table('Giocatori').select('players(name, role)').eq('team_id', team_id).execute()
             return [player['players'] for player in players_response.data] if players_response.data else []
         except Exception as e:
             print(f"Errore get_user_team: {e}")
@@ -29,7 +29,7 @@ class DatabaseReader:
     def get_all_players(self) -> List[Dict[str, Any]]:
         """Recupera tutti i giocatori disponibili"""
         try:
-            response = self.client.table('players').select('*').execute()
+            response = self.client.table('Giocatori').select('*').execute()
             return response.data if response.data else []
         except Exception as e:
             print(f"Errore get_all_players: {e}")
@@ -59,7 +59,7 @@ class DatabaseReader:
     def get_user_bets(self, username: str) -> List[Dict[str, Any]]:
         """Recupera le scommesse di un utente"""
         try:
-            response = self.client.table('bets').select('*').eq('username', username).execute()
+            response = self.client.table('Scommesse').select('*').eq('username', username).execute()
             return response.data if response.data else []
         except Exception as e:
             print(f"Errore get_user_bets: {e}")
@@ -68,7 +68,7 @@ class DatabaseReader:
     def get_ranking(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Recupera la classifica generale"""
         try:
-            response = self.client.table('teams').select('owner, name, points').order('points', desc=True).limit(limit).execute()
+            response = self.client.table('Squadre').select('owner, name, points').order('points', desc=True).limit(limit).execute()
             return response.data if response.data else []
         except Exception as e:
             print(f"Errore get_ranking: {e}")
@@ -76,7 +76,7 @@ class DatabaseReader:
     def get_all_teams(self) -> List[Dict[str, Any]]:
         """Recupera tutte le squadre"""
         try:
-            response = self.client.table('teams').select('*').execute()
+            response = self.client.table('Squadre').select('*').execute()
             return response.data if response.data else []
         except Exception as e:
             print(f"Errore get_all_teams: {e}")
@@ -85,7 +85,7 @@ class DatabaseReader:
     def get_player_stats(self, player_id: int) -> Optional[Dict[str, Any]]:
         """Recupera le statistiche di un singolo giocatore"""
         try:
-            response = self.client.table('player_stats').select('*').eq('player_id', player_id).single().execute()
+            response = self.client.table('Statistiche').select('*').eq('player_id', player_id).single().execute()
             return response.data if response.data else None
         except Exception as e:
             print(f"Errore get_player_stats: {e}")
@@ -94,7 +94,7 @@ class DatabaseReader:
     def search_players(self, search_term: str) -> List[Dict[str, Any]]:
         """Cerca giocatori per nome"""
         try:
-            response = self.client.table('players').select('*').ilike('name', f'%{search_term}%').execute()
+            response = self.client.table('Giocatori').select('*').ilike('name', f'%{search_term}%').execute()
             return response.data if response.data else []
         except Exception as e:
             print(f"Errore search_players: {e}")
