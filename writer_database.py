@@ -36,7 +36,7 @@ class DatabaseWriter:
                 'budget': 500,
                 'created_at': datetime.now().isoformat()
             }
-            response = self.client.table('teams').insert(data).execute()
+            response = self.client.table('Squadre').insert(data).execute()
             if response.data:
                 print(f"Squadra '{team_name}' creata con successo")
                 return response.data[0].get('id')
@@ -53,7 +53,7 @@ class DatabaseWriter:
             if not self.client:
                 return False
             updates['updated_at'] = datetime.now().isoformat()
-            response = self.client.table('teams').update(updates).eq('id', team_id).execute()
+            response = self.client.table('Squadre').update(updates).eq('id', team_id).execute()
             if response.data:
                 print(f"Squadra {team_id} aggiornata con successo")
                 return True
@@ -74,7 +74,7 @@ class DatabaseWriter:
                 'player_id': player_id,
                 'added_at': datetime.now().isoformat()
             }
-            response = self.client.table('team_players').insert(data).execute()
+            response = self.client.table('Giocatori').insert(data).execute()
             if response.data:
                 print(f"Giocatore {player_id} aggiunto alla squadra {team_id}")
                 return True
@@ -90,7 +90,7 @@ class DatabaseWriter:
         try:
             if not self.client:
                 return False
-            response = self.client.table('team_players').delete().eq('team_id', team_id).eq('player_id', player_id).execute()
+            response = self.client.table('Giocatori').delete().eq('team_id', team_id).eq('player_id', player_id).execute()
             print(f"Giocatore {player_id} rimosso dalla squadra {team_id}")
             return True
         except Exception as e:
@@ -113,7 +113,7 @@ class DatabaseWriter:
                 'status': 'pending',
                 'created_at': datetime.now().isoformat()
             }
-            response = self.client.table('bets').insert(data).execute()
+            response = self.client.table('Scommesse').insert(data).execute()
             if response.data:
                 bet_id = response.data[0].get('id')
                 print(f"Scommessa {bet_id} creata con successo")
@@ -130,7 +130,7 @@ class DatabaseWriter:
         try:
             if not self.client:
                 return False
-            response = self.client.table('teams').update({'points': points}).eq('id', team_id).execute()
+            response = self.client.table('Squadre').update({'points': points}).eq('id', team_id).execute()
             if response.data:
                 print(f"Punti squadra {team_id} aggiornati a {points}")
                 return True
@@ -152,7 +152,7 @@ class DatabaseWriter:
                 'status': 'completed',
                 'completed_at': datetime.now().isoformat()
             }
-            response = self.client.table('matches').update(data).eq('id', match_id).execute()
+            response = self.client.table('Partite').update(data).eq('id', match_id).execute()
             if response.data:
                 print(f"Risultato partita {match_id} aggiornato: {home_score}-{away_score}")
                 return True
@@ -169,7 +169,7 @@ class DatabaseWriter:
             if not self.client:
                 return False
             stats['updated_at'] = datetime.now().isoformat()
-            response = self.client.table('player_stats').upsert(stats).eq('player_id', player_id).execute()
+            response = self.client.table('Statistiche').upsert(stats).eq('player_id', player_id).execute()
             if response.data:
                 print(f"Statistiche giocatore {player_id} aggiornate")
                 return True
@@ -190,7 +190,7 @@ class DatabaseWriter:
                 'status': status,
                 'settled_at': datetime.now().isoformat()
             }
-            response = self.client.table('bets').update(data).eq('id', bet_id).execute()
+            response = self.client.table('Scommesse').update(data).eq('id', bet_id).execute()
             if response.data:
                 print(f"Scommessa {bet_id} chiusa come {status}")
                 return True
@@ -206,7 +206,7 @@ class DatabaseWriter:
         try:
             if not self.client:
                 return False
-            response = self.client.table('teams').update({'budget': new_budget}).eq('id', team_id).execute()
+            response = self.client.table('Squadre').update({'budget': new_budget}).eq('id', team_id).execute()
             if response.data:
                 print(f"Budget squadra {team_id} aggiornato a {new_budget}")
                 return True
@@ -222,7 +222,7 @@ class DatabaseWriter:
         try:
             if not self.client:
                 return False
-            self.client.table('team_players').delete().eq('team_id', team_id).execute()
+            self.client.table('Giocatori').delete().eq('team_id', team_id).execute()
             response = self.client.table('teams').delete().eq('id', team_id).execute()
             print(f"Squadra {team_id} eliminata")
             return True
@@ -239,7 +239,7 @@ class DatabaseWriter:
                 return False
             for update in updates:
                 update['updated_at'] = datetime.now().isoformat()
-            response = self.client.table('players').upsert(updates).execute()
+            response = self.client.table('Giocatori').upsert(updates).execute()
             if response.data:
                 print(f"{len(updates)} giocatori aggiornati in batch")
                 return True
