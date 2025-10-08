@@ -230,6 +230,46 @@ def create_scommessa():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ===== SCRITTURA - SCHEDINE =====
+@app.route('/api/schedine', methods=['POST'])
+@require_api_key
+def create_schedina():
+    """Crea una nuova schedina con multiple scommesse"""
+    try:
+        data = request.get_json()
+        
+        # Validazione campi obbligatori
+        if not data.get('user_id') or not data.get('scommesse'):
+            return jsonify({
+                'success': False,
+                'error': 'user_id e scommesse obbligatori'
+            }), 400
+        
+        if not isinstance(data['scommesse'], list) or len(data['scommesse']) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'scommesse deve essere una lista non vuota'
+            }), 400
+        
+        # Importo default 10€ se non specificato
+        importo = data.get('importo', 10.0)
+        
+        schedina_id = db_writer.create_schedina(
+            data['user_id'],
+            data['scommesse'],
+            importo
+        )
+        
+        if schedina_id:
+            return jsonify({
+                'success': True,
+                'data': {'id': schedina_id}
+            }), 201
+        
+        return jsonify({'success': False, 'error': 'Errore creazione schedina'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ===== ERROR HANDLERS =====
 @app.errorhandler(404)
 def not_found(error):
@@ -242,5 +282,6 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
