@@ -99,3 +99,35 @@ class DatabaseReader:
         except Exception as e:
             print(f"Errore search_players: {e}")
             return []
+
+    def check_user_exists(self, username: str) -> bool:
+        """Verifica se un utente esiste già"""
+        try:
+            response = self.client.table('Utenti').select('nome').eq('nome', username).execute()
+            return len(response.data) > 0
+        except Exception as e:
+            print(f"Errore check_user_exists: {e}")
+            return False
+    
+    def verify_user_login(self, username: str, password: str) -> bool:
+        """Verifica le credenziali di login"""
+        try:
+            response = self.client.table('Utenti').select('password').eq('nome', username).single().execute()
+            if response.data:
+                # Confronta la password
+                return response.data.get('password') == password
+            return False
+        except Exception as e:
+            print(f"Errore verify_user_login: {e}")
+            return False
+    
+    def get_user_id(self, username: str) -> Optional[int]:
+        """Recupera l'ID di un utente dal nome"""
+        try:
+            response = self.client.table('Utenti').select('id').eq('nome', username).single().execute()
+            if response.data:
+                return response.data.get('id')
+            return None
+        except Exception as e:
+            print(f"Errore get_user_id: {e}")
+            return None
