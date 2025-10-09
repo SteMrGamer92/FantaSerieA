@@ -148,7 +148,6 @@ class DatabaseWriter:
                     'quota': scommessa['quota'],
                     'puntata': puntata,
                     'scelta': scommessa['bet_type'],
-                    'giornata': scommessa.get('giornata', 1)  # Default giornata 1 se non specificata
                 }
                 rows_to_insert.append(row_data)
             
