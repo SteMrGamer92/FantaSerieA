@@ -72,7 +72,6 @@ class DatabaseWriter:
             data = {
                 'team_id': team_id,
                 'player_id': player_id,
-                'added_at': datetime.now().isoformat()
             }
             response = self.client.table('Giocatori').insert(data).execute()
             if response.data:
