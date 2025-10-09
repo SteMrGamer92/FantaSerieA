@@ -234,7 +234,7 @@ def create_scommessa():
 @app.route('/api/schedine', methods=['POST'])
 @require_api_key
 def create_schedina():
-    """Crea una nuova schedina con multiple scommesse"""
+    """Crea una nuova schedina (una riga per ogni scommessa)"""
     try:
         data = request.get_json()
         
@@ -251,19 +251,15 @@ def create_schedina():
                 'error': 'scommesse deve essere una lista non vuota'
             }), 400
         
-        # Importo default 10€ se non specificato
-        importo = data.get('importo', 10.0)
-        
-        schedina_id = db_writer.create_schedina(
+        success = db_writer.create_schedina(
             data['user_id'],
-            data['scommesse'],
-            importo
+            data['scommesse']
         )
         
-        if schedina_id:
+        if success:
             return jsonify({
                 'success': True,
-                'data': {'id': schedina_id}
+                'message': f"{len(data['scommesse'])} scommesse salvate"
             }), 201
         
         return jsonify({'success': False, 'error': 'Errore creazione schedina'}), 500
@@ -282,6 +278,7 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
