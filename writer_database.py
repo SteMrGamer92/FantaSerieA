@@ -162,7 +162,40 @@ class DatabaseWriter:
         except Exception as e:
             print(f"❌ Errore create_schedina: {e}")
             return False
+
+    def create_user(self, username: str, password: str) -> Optional[int]:
+        """
+        Crea un nuovo utente
+        
+        Args:
+            username: Nome utente
+            password: Password (in chiaro per ora, poi vedremo hash)
+        
+        Returns:
+            ID dell'utente creato o None
+        """
+        try:
+            if not self.client:
+                return None
             
+            data = {
+                'nome': username,
+                'password': password,
+                'created_at': datetime.now().isoformat()
+            }
+            
+            response = self.client.table('Utenti').insert(data).execute()
+            
+            if response.data:
+                user_id = response.data[0].get('id')
+                print(f"✅ Utente '{username}' creato con ID {user_id}")
+                return user_id
+            
+            return None
+        except Exception as e:
+            print(f"❌ Errore create_user: {e}")
+            return None
+        
     def update_team_points(self, team_id: int, points: int) -> bool:
         """
         Aggiorna i punti di una squadra
