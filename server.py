@@ -266,6 +266,76 @@ def create_schedina():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ===== AUTENTICAZIONE =====
+@app.route('/api/auth/check-user', methods=['POST'])
+@require_api_key
+def check_user():
+    """Verifica se un username esiste già"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        
+        if not username:
+            return jsonify({'success': False, 'error': 'username obbligatorio'}), 400
+        
+        exists = db_reader.check_user_exists(username)
+        return jsonify({'success': True, 'exists': exists})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/auth/register', methods=['POST'])
+@require_api_key
+def register_user():
+    """Registra un nuovo utente"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'username e password obbligatori'}), 400
+        
+        # Verifica che l'utente non esista già
+        if db_reader.check_user_exists(username):
+            return jsonify({'success': False, 'error': 'Username già esistente'}), 409
+        
+        # Crea l'utente
+        user_id = db_writer.create_user(username, password)
+        
+        if user_id:
+            return jsonify({
+                'success': True,
+                'data': {'id': user_id, 'username': username}
+            }), 201
+        
+        return jsonify({'success': False, 'error': 'Errore creazione utente'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/auth/login', methods=['POST'])
+@require_api_key
+def login_user():
+    """Effettua il login"""
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({'success': False, 'error': 'username e password obbligatori'}), 400
+        
+        # Verifica credenziali
+        if db_reader.verify_user_login(username, password):
+            user_id = db_reader.get_user_id(username)
+            return jsonify({
+                'success': True,
+                'data': {'id': user_id, 'username': username}
+            })
+        
+        return jsonify({'success': False, 'error': 'Credenziali non valide'}), 401
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+        
 # ===== ERROR HANDLERS =====
 @app.errorhandler(404)
 def not_found(error):
@@ -278,6 +348,7 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
