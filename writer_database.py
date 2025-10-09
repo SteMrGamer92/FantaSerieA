@@ -123,64 +123,46 @@ class DatabaseWriter:
             print(f"Errore create_bet: {e}")
             return None
             
-    def create_schedina(self, user_id: int, scommesse: List[Dict[str, Any]], importo: float = 10.0) -> Optional[int]:
+    def create_schedina(self, user_id: int, scommesse: List[Dict[str, Any]]) -> bool:
         """
-        Crea una nuova schedina con multiple scommesse
+        Crea una nuova schedina inserendo una riga per ogni scommessa
         
         Args:
             user_id: ID dell'utente
-            scommesse: Lista di dict con {match_id, bet_type, quota}
-            importo: Importo giocato (default 10€)
+            scommesse: Lista di dict con {match_id, bet_type, quota, giornata}
         
         Returns:
-            ID della schedina creata o None
+            True se tutte le scommesse sono state salvate, False altrimenti
         """
         try:
             if not self.client:
-                return None
+                return False
             
-            # Calcola quota totale
-            quota_totale = 1.0
+            puntata = 10.0  # Puntata fissa
+            rows_to_insert = []
+            
             for scommessa in scommesse:
-                quota_totale *= scommessa['quota']
+                row_data = {
+                    'IDpartita': scommessa['match_id'],
+                    'IDutente': user_id,
+                    'quota': scommessa['quota'],
+                    'puntata': puntata,
+                    'scelta': scommessa['bet_type'],
+                    'giornata': scommessa.get('giornata', 1)  # Default giornata 1 se non specificata
+                }
+                rows_to_insert.append(row_data)
             
-            # Calcola vincita potenziale
-            vincita_potenziale = importo * quota_totale
-            
-            # Crea la schedina principale
-            schedina_data = {
-                'user_id': user_id,
-                'importo': importo,
-                'quota_totale': quota_totale,
-                'vincita_potenziale': vincita_potenziale,
-                'stato': 'pending',
-                'created_at': datetime.now().isoformat()
-            }
-            
-            response = self.client.table('Schedine').insert(schedina_data).execute()
+            # Inserisci tutte le righe in un colpo solo
+            response = self.client.table('Schedine').insert(rows_to_insert).execute()
             
             if response.data:
-                schedina_id = response.data[0].get('id')
-                print(f"Schedina {schedina_id} creata con successo")
-                
-                # Crea le singole scommesse collegate alla schedina
-                for scommessa in scommesse:
-                    dettaglio_data = {
-                        'schedina_id': schedina_id,
-                        'match_id': scommessa['match_id'],
-                        'bet_type': scommessa['bet_type'],
-                        'quota': scommessa['quota'],
-                        'created_at': datetime.now().isoformat()
-                    }
-                    self.client.table('Schedine_Dettagli').insert(dettaglio_data).execute()
-                
-                print(f"Aggiunte {len(scommesse)} scommesse alla schedina {schedina_id}")
-                return schedina_id
+                print(f"✅ Schedina salvata: {len(rows_to_insert)} scommesse inserite")
+                return True
             
-            return None
+            return False
         except Exception as e:
-            print(f"Errore create_schedina: {e}")
-            return None
+            print(f"❌ Errore create_schedina: {e}")
+            return False
             
     def update_team_points(self, team_id: int, points: int) -> bool:
         """
