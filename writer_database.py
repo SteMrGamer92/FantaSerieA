@@ -34,7 +34,6 @@ class DatabaseWriter:
                 'name': team_name,
                 'points': 0,
                 'budget': 500,
-                'created_at': datetime.now().isoformat()
             }
             response = self.client.table('Squadre').insert(data).execute()
             if response.data:
@@ -110,7 +109,6 @@ class DatabaseWriter:
                 'amount': amount,
                 'odds': odds,
                 'status': 'pending',
-                'created_at': datetime.now().isoformat()
             }
             response = self.client.table('Scommesse').insert(data).execute()
             if response.data:
@@ -180,7 +178,6 @@ class DatabaseWriter:
             data = {
                 'nome': username,
                 'password': password,
-                'created_at': datetime.now().isoformat()
             }
             
             response = self.client.table('Utenti').insert(data).execute()
@@ -222,7 +219,6 @@ class DatabaseWriter:
                 'home_score': home_score,
                 'away_score': away_score,
                 'status': 'completed',
-                'completed_at': datetime.now().isoformat()
             }
             response = self.client.table('Partite').update(data).eq('id', match_id).execute()
             if response.data:
