@@ -130,18 +130,6 @@ def get_scommesse_utente(username):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# ===== CLASSIFICA (LETTURA) =====
-@app.route('/api/classifica', methods=['GET'])
-@require_api_key
-def get_classifica():
-    """Recupera la classifica"""
-    try:
-        limit = request.args.get('limit', 50, type=int)
-        classifica = db_reader.get_ranking(limit)
-        return jsonify({'success': True, 'data': classifica})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 # ===== SCRITTURA - SQUADRE =====
 @app.route('/api/squadre', methods=['POST'])
 @require_api_key
@@ -377,6 +365,7 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
