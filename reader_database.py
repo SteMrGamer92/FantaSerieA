@@ -131,3 +131,74 @@ class DatabaseReader:
         except Exception as e:
             print(f"Errore get_user_id: {e}")
             return None
+
+    def get_ranking(self, giornata: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Recupera la classifica dalla tabella Schedine
+        Aggrega i punti per utente
+        
+        Args:
+            giornata: Numero della giornata (None = classifica totale)
+        
+        Returns:
+            Lista di dict con {username, punti_totali}
+        """
+        try:
+            query = self.client.table('Schedine').select('IDutente, punti, giornata')
+            
+            if giornata:
+                query = query.eq('giornata', giornata)
+            
+            response = query.execute()
+            
+            if not response.data:
+                return []
+            
+            # Aggrega i punti per utente
+            punti_per_utente = {}
+            for row in response.data:
+                user_id = row.get('IDutente')
+                punti = row.get('punti', 0) or 0  # Gestisci None
+                
+                if user_id not in punti_per_utente:
+                    punti_per_utente[user_id] = 0
+                punti_per_utente[user_id] += punti
+            
+            # Converti in lista e aggiungi username
+            ranking = []
+            for user_id, punti_totali in punti_per_utente.items():
+                # Prendi il nome utente dalla tabella Utenti
+                user = self.client.table('Utenti').select('nome').eq('id', user_id).single().execute()
+                username = user.data.get('nome', f'User_{user_id}') if user.data else f'User_{user_id}'
+                
+                ranking.append({
+                    'user_id': user_id,
+                    'username': username,
+                    'punti': punti_totali
+                })
+            
+            # Ordina per punti decrescenti
+            ranking.sort(key=lambda x: x['punti'], reverse=True)
+            
+            return ranking
+        except Exception as e:
+            print(f"Errore get_ranking: {e}")
+            return []
+    
+    def get_available_giornate(self) -> List[int]:
+        """Recupera tutte le giornate disponibili dalla tabella Schedine"""
+        try:
+            response = self.client.table('Schedine').select('giornata').execute()
+            
+            if response.data:
+                # Estrai valori unici, rimuovi None, e ordina
+                giornate = sorted(set(
+                    row['giornata'] 
+                    for row in response.data 
+                    if row.get('giornata') is not None
+                ))
+                return giornate
+            return []
+        except Exception as e:
+            print(f"Errore get_available_giornate: {e}")
+            return []
