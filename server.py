@@ -335,6 +335,35 @@ def login_user():
         return jsonify({'success': False, 'error': 'Credenziali non valide'}), 401
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ===== CLASSIFICA =====
+@app.route('/api/classifica', methods=['GET'])
+@require_api_key
+def get_classifica():
+    """Recupera la classifica"""
+    try:
+        giornata = request.args.get('giornata', type=int)
+        classifica = db_reader.get_ranking(giornata)
+        return jsonify({
+            'success': True,
+            'data': classifica,
+            'count': len(classifica)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/classifica/giornate', methods=['GET'])
+@require_api_key
+def get_giornate():
+    """Recupera tutte le giornate disponibili"""
+    try:
+        giornate = db_reader.get_available_giornate()
+        return jsonify({
+            'success': True,
+            'data': giornate
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
         
 # ===== ERROR HANDLERS =====
 @app.errorhandler(404)
@@ -348,6 +377,7 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
