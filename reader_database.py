@@ -35,17 +35,22 @@ class DatabaseReader:
             print(f"Errore get_all_players: {e}")
             return []
     
-    def get_matches(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Recupera le partite dal database"""
-        try:
-            query = self.client.table('Partite').select('*')
-            if status:
-                query = query.eq('stato', status)
-            response = query.execute()
-            return response.data if response.data else []
-        except Exception as e:
-            print(f"Errore get_matches: {e}")
-            return []
+    def get_matches(self, status: Optional[str] = None, giornata: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Recupera le partite dal database"""
+    try:
+        query = self.client.table('Partite').select('*')
+        
+        if status:
+            query = query.eq('stato', status)
+        
+        if giornata:
+            query = query.eq('giornata', giornata)
+        
+        response = query.execute()
+        return response.data if response.data else []
+    except Exception as e:
+        print(f"Errore get_matches: {e}")
+        return []
     
     def get_match_details(self, match_id: int) -> Optional[Dict[str, Any]]:
         """Recupera i dettagli completi di una partita"""
@@ -73,6 +78,7 @@ class DatabaseReader:
         except Exception as e:
             print(f"Errore get_ranking: {e}")
             return []
+            
     def get_all_teams(self) -> List[Dict[str, Any]]:
         """Recupera tutte le squadre"""
         try:
@@ -185,20 +191,20 @@ class DatabaseReader:
             print(f"Errore get_ranking: {e}")
             return []
     
-    def get_available_giornate(self) -> List[int]:
-        """Recupera tutte le giornate disponibili dalla tabella Schedine"""
-        try:
-            response = self.client.table('Schedine').select('giornata').execute()
-            
-            if response.data:
-                # Estrai valori unici, rimuovi None, e ordina
-                giornate = sorted(set(
-                    row['giornata'] 
-                    for row in response.data 
-                    if row.get('giornata') is not None
-                ))
-                return giornate
-            return []
-        except Exception as e:
-            print(f"Errore get_available_giornate: {e}")
-            return []
+    def get_available_giornate_partite(self) -> List[int]:
+    """Recupera tutte le giornate disponibili dalla tabella Partite"""
+    try:
+        response = self.client.table('Partite').select('giornata').execute()
+        
+        if response.data:
+            # Estrai valori unici, rimuovi None, e ordina
+            giornate = sorted(set(
+                row['giornata'] 
+                for row in response.data 
+                if row.get('giornata') is not None
+            ))
+            return giornate
+        return []
+    except Exception as e:
+        print(f"Errore get_available_giornate_partite: {e}")
+        return []
