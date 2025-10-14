@@ -43,11 +43,25 @@ def get_partite():
     """Recupera tutte le partite"""
     try:
         status = request.args.get('stato')
-        partite = db_reader.get_matches(status)
+        giornata = request.args.get('giornata', type=int)  # ✅ AGGIUNGI
+        partite = db_reader.get_matches(status, giornata)  # ✅ AGGIUNGI giornata
         return jsonify({
             'success': True,
             'data': partite,
             'count': len(partite)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/partite/giornate', methods=['GET'])
+@require_api_key
+def get_giornate_partite():
+    """Recupera tutte le giornate disponibili per le partite"""
+    try:
+        giornate = db_reader.get_available_giornate_partite()
+        return jsonify({
+            'success': True,
+            'data': giornate
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -365,6 +379,7 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
