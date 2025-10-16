@@ -190,6 +190,20 @@ class DatabaseReader:
         except Exception as e:
             print(f"Errore get_ranking: {e}")
             return []
+
+    def get_available_giornate(self) -> List[int]:
+    """Recupera tutte le giornate disponibili"""
+    try:
+        response = self.client.table('Classifica').select('giornata').execute()
+        
+        if response.data:
+            # Estrai valori unici e ordina
+            giornate = sorted(set(row['giornata'] for row in response.data if row.get('giornata')))
+            return giornate
+        return []
+    except Exception as e:
+        print(f"Errore get_available_giornate: {e}")
+        return []
     
     def get_available_giornate_partite(self) -> List[int]:
     """Recupera tutte le giornate disponibili dalla tabella Partite"""
