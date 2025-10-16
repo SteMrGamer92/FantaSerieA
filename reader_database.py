@@ -208,3 +208,27 @@ class DatabaseReader:
     except Exception as e:
         print(f"Errore get_available_giornate_partite: {e}")
         return []
+
+    def get_user_schedine(self, user_id: int, giornata: Optional[int] = None) -> List[Dict[str, Any]]:
+    """
+    Recupera le schedine di un utente per una giornata
+    
+    Args:
+        user_id: ID dell'utente
+        giornata: Numero giornata (None = tutte)
+    
+    Returns:
+        Lista di dict con {IDpartita, scelta, punti, giornata}
+    """
+    try:
+        query = self.client.table('Schedine').select('IDpartita, scelta, punti, giornata')
+        query = query.eq('IDutente', user_id)
+        
+        if giornata:
+            query = query.eq('giornata', giornata)
+        
+        response = query.execute()
+        return response.data if response.data else []
+    except Exception as e:
+        print(f"Errore get_user_schedine: {e}")
+        return []
