@@ -268,6 +268,22 @@ def create_schedina():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# ===== LETTURA SCHEDINE UTENTE =====
+@app.route('/api/schedine/<int:user_id>', methods=['GET'])
+@require_api_key
+def get_user_schedine(user_id):
+    """Recupera le schedine di un utente"""
+    try:
+        giornata = request.args.get('giornata', type=int)
+        schedine = db_reader.get_user_schedine(user_id, giornata)
+        return jsonify({
+            'success': True,
+            'data': schedine,
+            'count': len(schedine)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+        
 # ===== AUTENTICAZIONE =====
 @app.route('/api/auth/check-user', methods=['POST'])
 @require_api_key
@@ -379,6 +395,7 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
 
 
 
