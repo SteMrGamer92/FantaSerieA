@@ -36,21 +36,21 @@ class DatabaseReader:
             return []
     
     def get_matches(self, status: Optional[str] = None, giornata: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Recupera le partite dal database"""
-    try:
-        query = self.client.table('Partite').select('*')
-        
-        if status:
-            query = query.eq('stato', status)
-        
-        if giornata:
-            query = query.eq('giornata', giornata)
-        
-        response = query.execute()
-        return response.data if response.data else []
-    except Exception as e:
-        print(f"Errore get_matches: {e}")
-        return []
+        """Recupera le partite dal database"""
+        try:
+            query = self.client.table('Partite').select('*')
+            
+            if status:
+                query = query.eq('stato', status)
+            
+            if giornata:
+                query = query.eq('giornata', giornata)
+            
+            response = query.execute()
+            return response.data if response.data else []
+        except Exception as e:
+            print(f"Errore get_matches: {e}")
+            return []
     
     def get_match_details(self, match_id: int) -> Optional[Dict[str, Any]]:
         """Recupera i dettagli completi di una partita"""
@@ -192,43 +192,43 @@ class DatabaseReader:
             return []
     
     def get_available_giornate_partite(self) -> List[int]:
-    """Recupera tutte le giornate disponibili dalla tabella Partite"""
-    try:
-        response = self.client.table('Partite').select('giornata').execute()
-        
-        if response.data:
-            # Estrai valori unici, rimuovi None, e ordina
-            giornate = sorted(set(
-                row['giornata'] 
-                for row in response.data 
-                if row.get('giornata') is not None
-            ))
-            return giornate
-        return []
-    except Exception as e:
-        print(f"Errore get_available_giornate_partite: {e}")
-        return []
+        """Recupera tutte le giornate disponibili dalla tabella Partite"""
+        try:
+            response = self.client.table('Partite').select('giornata').execute()
+            
+            if response.data:
+                # Estrai valori unici, rimuovi None, e ordina
+                giornate = sorted(set(
+                    row['giornata'] 
+                    for row in response.data 
+                    if row.get('giornata') is not None
+                ))
+                return giornate
+            return []
+        except Exception as e:
+            print(f"Errore get_available_giornate_partite: {e}")
+            return []
 
     def get_user_schedine(self, user_id: int, giornata: Optional[int] = None) -> List[Dict[str, Any]]:
-    """
-    Recupera le schedine di un utente per una giornata
-    
-    Args:
-        user_id: ID dell'utente
-        giornata: Numero giornata (None = tutte)
-    
-    Returns:
-        Lista di dict con {IDpartita, scelta, punti, giornata}
-    """
-    try:
-        query = self.client.table('Schedine').select('IDpartita, scelta, punti, giornata')
-        query = query.eq('IDutente', user_id)
+        """
+        Recupera le schedine di un utente per una giornata
         
-        if giornata:
-            query = query.eq('giornata', giornata)
+        Args:
+            user_id: ID dell'utente
+            giornata: Numero giornata (None = tutte)
         
-        response = query.execute()
-        return response.data if response.data else []
-    except Exception as e:
-        print(f"Errore get_user_schedine: {e}")
-        return []
+        Returns:
+            Lista di dict con {IDpartita, scelta, punti, giornata}
+        """
+        try:
+            query = self.client.table('Schedine').select('IDpartita, scelta, punti, giornata')
+            query = query.eq('IDutente', user_id)
+            
+            if giornata:
+                query = query.eq('giornata', giornata)
+            
+            response = query.execute()
+            return response.data if response.data else []
+        except Exception as e:
+            print(f"Errore get_user_schedine: {e}")
+            return []
