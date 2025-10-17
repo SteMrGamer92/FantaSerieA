@@ -122,11 +122,11 @@ class DatabaseWriter:
             
     def create_schedina(self, user_id: int, scommesse: List[Dict[str, Any]]) -> bool:
         """
-        Crea una nuova schedina inserendo una riga per ogni scommessa
+        Crea o aggiorna una schedina inserendo/modificando una riga per ogni scommessa
         
         Args:
             user_id: ID dell'utente
-            scommesse: Lista di dict con {match_id, bet_type, quota, giornata}
+            scommesse: Lista di dict con {match_id, bet_type, quota, puntata}
         
         Returns:
             True se tutte le scommesse sono state salvate, False altrimenti
@@ -135,27 +135,53 @@ class DatabaseWriter:
             if not self.client:
                 return False
             
-            puntata = 10.0  # Puntata fissa
-            rows_to_insert = []
-            
             for scommessa in scommesse:
-                row_data = {
-                    'IDpartita': scommessa['match_id'],
-                    'IDutente': user_id,
-                    'quota': scommessa['quota'],
-                    'puntata': puntata,
-                    'scelta': scommessa['bet_type'],
-                }
-                rows_to_insert.append(row_data)
+                match_id = scommessa['match_id']
+                bet_type = scommessa['bet_type']
+                quota = scommessa['quota']
+                puntata = scommessa.get('puntata', 10.0)  # ✅ Usa puntata dal frontend o default 10
+                
+                # Controlla se esiste già una scommessa per questo utente e partita
+                existing = self.client.table('Schedine').select('id').eq('IDutente', user_id).eq('IDpartita', match_id).execute()
+                
+                if existing.data and len(existing.data) > 0:
+                    # Scommessa esistente → AGGIORNA
+                    schedina_id = existing.data[0]['id']
+                    
+                    update_data = {
+                        'scelta': bet_type,
+                        'quota': quota,
+                        'puntata': puntata,  # ✅ Aggiorna anche la puntata
+                    }
+                    
+                    response = self.client.table('Schedine').update(update_data).eq('id', schedina_id).execute()
+                    
+                    if response.data:
+                        print(f"✅ Scommessa aggiornata: Partita {match_id}, Scelta {bet_type}, Puntata €{puntata}")
+                    else:
+                        print(f"⚠️ Errore aggiornamento scommessa partita {match_id}")
+                        return False
+                else:
+                    # Scommessa nuova → INSERISCI
+                    insert_data = {
+                        'IDpartita': match_id,
+                        'IDutente': user_id,
+                        'quota': quota,
+                        'puntata': puntata,  # ✅ Usa puntata variabile
+                        'scelta': bet_type,
+                    }
+                    
+                    response = self.client.table('Schedine').insert(insert_data).execute()
+                    
+                    if response.data:
+                        print(f"✅ Nuova scommessa inserita: Partita {match_id}, Scelta {bet_type}, Puntata €{puntata}")
+                    else:
+                        print(f"⚠️ Errore inserimento scommessa partita {match_id}")
+                        return False
             
-            # Inserisci tutte le righe in un colpo solo
-            response = self.client.table('Schedine').insert(rows_to_insert).execute()
+            print(f"✅ Schedina completata: {len(scommesse)} scommesse processate")
+            return True
             
-            if response.data:
-                print(f"✅ Schedina salvata: {len(rows_to_insert)} scommesse inserite")
-                return True
-            
-            return False
         except Exception as e:
             print(f"❌ Errore create_schedina: {e}")
             return False
