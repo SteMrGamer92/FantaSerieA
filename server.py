@@ -395,12 +395,30 @@ def internal_error(error):
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
-
-
-
-
-
-
-
-
-
+    
+@app.route('/api/schedine/<int:user_id>/<int:match_id>', methods=['DELETE'])
+@require_api_key
+def delete_schedina(user_id, match_id):
+    """
+    Elimina una scommessa specifica
+    
+    Args:
+        user_id: ID dell'utente
+        match_id: ID della partita
+    """
+    try:
+        success = db_writer.delete_schedina(user_id, match_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Scommessa eliminata per partita {match_id}'
+            })
+        
+        return jsonify({
+            'success': False, 
+            'error': 'Scommessa non trovata o errore eliminazione'
+        }), 404
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
