@@ -341,3 +341,32 @@ class DatabaseWriter:
         except Exception as e:
             print(f"Errore batch_update_players: {e}")
             return False
+
+    def delete_schedina(self, user_id: int, match_id: int) -> bool:
+        """
+        Elimina una scommessa specifica dalla tabella Schedine
+        
+        Args:
+            user_id: ID dell'utente
+            match_id: ID della partita
+        
+        Returns:
+            True se eliminazione riuscita, False altrimenti
+        """
+        try:
+            if not self.client:
+                return False
+            
+            # Elimina la riga dove IDutente = user_id AND IDpartita = match_id
+            response = self.client.table('Schedine').delete().eq('IDutente', user_id).eq('IDpartita', match_id).execute()
+            
+            if response.data:
+                print(f"Scommessa eliminata: User {user_id}, Partita {match_id}")
+                return True
+            else:
+                print(f"Scommessa non trovata: User {user_id}, Partita {match_id}")
+                return False
+                
+        except Exception as e:
+            print(f"Errore delete_schedina: {e}")
+            return False
