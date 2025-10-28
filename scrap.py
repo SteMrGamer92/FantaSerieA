@@ -48,24 +48,10 @@ def insert_or_update_match(supabase, match_data):
         return False
 
 def fetch_page(url):
-    """Recupera il contenuto HTML di una pagina usando Playwright"""
     try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto(url, timeout=60000)
-            
-            try:
-                page.wait_for_selector('div[class*="Box"]', timeout=30000)
-                page.wait_for_load_state('networkidle')
-            except Exception as e:
-                print(f"  ⏳ Timeout attesa elementi")
-            
-            html_content = page.content()
-            browser.close()
-            return html_content
-    except Exception as e:
-        print(f"❌ Errore recupero pagina: {e}")
+        response = requests.get(url, timeout=30)
+        return response.text
+    except:
         return None
 
 def extract_match_id_from_url(href):
@@ -423,3 +409,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+
