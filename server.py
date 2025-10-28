@@ -392,10 +392,59 @@ def not_found(error):
 def internal_error(error):
     return jsonify({'success': False, 'error': 'Errore server'}), 500
 
-if __name__ == '__main__':
-    port = int(os.getenv('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+@app.route('/api/admin/update-matches', methods=['POST'])
+@require_api_key
+def update_matches():
+    """
+    Avvia lo scraper per aggiornare le partite dal sito
+    ⚠️ ATTENZIONE: Operazione lenta (può richiedere diversi minuti)
+    """
+    try:
+        import subprocess
+        import sys
+                
+        print("🚀 Avvio scraper...")
+        
+        # Esegui lo scraper in background
+        process = subprocess.Popen(
+            [sys.executable, 'scrap.py'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        # Attendi il completamento (ATTENZIONE: blocca il server!)
+        stdout, stderr = process.communicate(timeout=600)  # 10 minuti max
+        
+        if process.returncode == 0:
+            print("✅ Scraper completato con successo")
+            return jsonify({
+                'success': True,
+                'message': 'Database aggiornato con successo',
+                'details': stdout[-500:] if stdout else ''  # Ultimi 500 caratteri
+            })
+        else:
+            print(f"❌ Errore scraper: {stderr}")
+            return jsonify({
+                'success': False,
+                'error': 'Errore durante l\'aggiornamento',
+                'details': stderr[-500:] if stderr else ''
+            }), 500
     
+    except subprocess.TimeoutExpired:
+        print("⏰ Timeout scraper")
+        return jsonify({
+            'success': False,
+            'error': 'Timeout: operazione troppo lenta'
+        }), 500
+    
+    except Exception as e:
+        print(f"❌ Errore update_matches: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/schedine/<int:user_id>/<int:match_id>', methods=['DELETE'])
 @require_api_key
 def delete_schedina(user_id, match_id):
@@ -422,3 +471,8 @@ def delete_schedina(user_id, match_id):
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False)
+    
