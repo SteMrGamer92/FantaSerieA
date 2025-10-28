@@ -419,8 +419,7 @@ def main():
     print(f"✅ Successi: {success_count}")
     print(f"❌ Errori: {error_count}")
     print("=" * 60)
-    
-    input("\n⏸️  Premi Invio per chiudere...")
 
 if __name__ == "__main__":
+
     main()
