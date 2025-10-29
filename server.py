@@ -430,6 +430,18 @@ def update_matches():
             'details': str(e)
         }), 500
 
+@app.route('/api/admin/scraper-log', methods=['GET'])
+@require_api_key
+def get_scraper_log():
+    try:
+        with open('/tmp/scraper.log', 'r') as f:
+            log = f.read()
+        return jsonify({'success': True, 'log': log[-2000:]})  # ultimi 2000 caratteri
+    except FileNotFoundError:
+        return jsonify({'success': False, 'error': 'Log non trovato'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+        
 @app.route('/api/schedine/<int:user_id>/<int:match_id>', methods=['DELETE'])
 @require_api_key
 def delete_schedina(user_id, match_id):
@@ -461,4 +473,5 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
 
