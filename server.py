@@ -397,52 +397,37 @@ def internal_error(error):
 def update_matches():
     """
     Avvia lo scraper per aggiornare le partite dal sito
-    ⚠️ ATTENZIONE: Operazione lenta (può richiedere diversi minuti)
+    ⚠️ ATTENZIONE: Operazione lenta (eseguita in background)
     """
     try:
         import subprocess
         import sys
-                
-        print("🚀 Avvio scraper...")
-        
-        # Esegui lo scraper in background
-        process = subprocess.Popen(
+        import os
+
+        print("🚀 Avvio scraper in BACKGROUND...")
+
+        # Esegui scrap.py in background SENZA attendere
+        subprocess.Popen(
             [sys.executable, 'scrap.py'],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            stdout=open('/tmp/scraper.log', 'w'),
+            stderr=subprocess.STDOUT,
+            cwd=os.getcwd()
         )
-        
-        # Attendi il completamento (ATTENZIONE: blocca il server!)
-        stdout, stderr = process.communicate(timeout=600)  # 10 minuti max
-        
-        if process.returncode == 0:
-            print("✅ Scraper completato con successo")
-            return jsonify({
-                'success': True,
-                'message': 'Database aggiornato con successo',
-                'details': stdout[-500:] if stdout else ''  # Ultimi 500 caratteri
-            })
-        else:
-            print(f"❌ Errore scraper: {stderr}")
-            return jsonify({
-                'success': False,
-                'error': 'Errore durante l\'aggiornamento',
-                'details': stderr[-500:] if stderr else ''
-            }), 500
-    
-    except subprocess.TimeoutExpired:
-        print("⏰ Timeout scraper")
+
         return jsonify({
-            'success': False,
-            'error': 'Timeout: operazione troppo lenta'
-        }), 500
-    
+            'success': True,
+            'message': 'Scraper avviato in background. Controlla i log tra 1-2 minuti.',
+            'log_file': '/tmp/scraper.log'
+        }), 202  # 202 Accepted = in elaborazione
+
     except Exception as e:
-        print(f"❌ Errore update_matches: {e}")
+        print(f"❌ Errore avvio scraper: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Impossibile avviare scraper',
+            'details': str(e)
         }), 500
 
 @app.route('/api/schedine/<int:user_id>/<int:match_id>', methods=['DELETE'])
@@ -476,3 +461,4 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
