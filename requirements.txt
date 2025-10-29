@@ -4,6 +4,6 @@ gunicorn==21.2.0
 supabase==2.0.3
 httpx==0.24.1
 python-dotenv==1.0.0
-playwright==1.40.0
+playwright==1.48.0
 lxml==5.1.0
 pytz==2023.3
