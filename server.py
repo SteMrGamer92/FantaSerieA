@@ -396,49 +396,59 @@ def internal_error(error):
 @require_api_key
 def update_matches():
     """
-    Avvia lo scraper per aggiornare le partite dal sito
-    ⚠️ ATTENZIONE: Operazione lenta (eseguita in background)
+    Avvia lo scraper in background (completamente staccato)
     """
     try:
         import subprocess
-        import sys
         import os
 
-        print("🚀 Avvio scraper in BACKGROUND...")
+        logger.info("Avvio scraper in BACKGROUND (detached)...")
 
-        # Esegui scrap.py in background SENZA attendere
+        # Comando: python scrap.py > scraper.log 2>&1 &
+        cmd = [
+            'nohup',
+            sys.executable, 'scrap.py',
+            '>', '/tmp/scraper.log',
+            '2>&1',
+            '&'
+        ]
+
+        # Esegui come shell command
         subprocess.Popen(
-            [sys.executable, 'scrap.py'],
-            stdout=open('/tmp/scraper.log', 'w'),
-            stderr=subprocess.STDOUT,
-            cwd=os.getcwd()
+            ' '.join(cmd),
+            shell=True,
+            cwd=os.getcwd(),
+            preexec_fn=os.setsid  # Crea nuovo session group → ignora SIGTERM del parent
         )
 
         return jsonify({
             'success': True,
-            'message': 'Scraper avviato in background. Controlla i log tra 1-2 minuti.',
-            'log_file': '/tmp/scraper.log'
-        }), 202  # 202 Accepted = in elaborazione
+            'message': 'Scraper avviato in background. Log in /tmp/scraper.log (visibili in Render tra 10-20s)',
+            'log_hint': 'Vai su Render → Logs → cerca "SCRAPER" o scarica /tmp/scraper.log'
+        }), 202
 
     except Exception as e:
-        print(f"❌ Errore avvio scraper: {e}")
+        logger.error(f"Errore avvio scraper: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': 'Impossibile avviare scraper',
-            'details': str(e)
-        }), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/admin/scraper-log', methods=['GET'])
 @require_api_key
 def get_scraper_log():
     try:
-        with open('/tmp/scraper.log', 'r') as f:
-            log = f.read()
-        return jsonify({'success': True, 'log': log[-2000:]})  # ultimi 2000 caratteri
-    except FileNotFoundError:
-        return jsonify({'success': False, 'error': 'Log non trovato'})
+        log_path = '/tmp/scraper.log'
+        if not os.path.exists(log_path):
+            return jsonify({'success': False, 'error': 'Log non ancora creato'})
+        
+        with open(log_path, 'r') as f:
+            content = f.read()
+        
+        return jsonify({
+            'success': True,
+            'log': content.splitlines()[-100:],  # ultime 100 righe
+            'full_path': log_path
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
         
@@ -473,5 +483,6 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
 
 
