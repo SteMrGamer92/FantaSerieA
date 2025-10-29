@@ -23,6 +23,32 @@ def init_supabase():
         traceback.print_exc()
         return None
 
+def ensure_playwright_browser():
+    """Garantisce che il browser Chromium sia installato all'avvio"""
+    cache_dir = "/opt/render/.cache/ms-playwright"
+    chrome_path = None
+
+    if os.path.exists(cache_dir):
+        result = subprocess.run(
+            ["find", cache_dir, "-name", "chrome", "-type", "f", "-executable"],
+            capture_output=True, text=True
+        )
+        if result.stdout.strip():
+            chrome_path = result.stdout.strip().split('\n')[0]
+
+    if not chrome_path:
+        print("Chromium non trovato. Installazione in corso...")
+        try:
+            subprocess.check_call([
+                sys.executable, "-m", "playwright", "install", "chromium", "--force"
+            ])
+            print("Chromium installato con successo.")
+        except subprocess.CalledProcessError as e:
+            print(f"Errore installazione browser: {e}")
+            sys.exit(1)
+    else:
+        print(f"Chromium già presente: {os.path.dirname(chrome_path)}")
+        
 def check_match_exists(supabase, match_id):
     """Verifica se una partita esiste già nel database"""
     try:
@@ -326,6 +352,7 @@ def extract_goals(tree, stato):
     return goalcasa, goaltrasferta
 
 def main():
+    ensure_playwright_browser()
     try:
         print("=" * 60)
         print("🚀 Avvio scraping Serie A")
@@ -432,3 +459,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
