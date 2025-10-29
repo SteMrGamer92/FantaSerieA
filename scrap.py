@@ -9,6 +9,15 @@ import pytz
 from supabase import create_client, Client
 import sys
 import traceback
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
+logger = logging.getLogger(__name__)
 
 # ===== CONFIGURAZIONE SUPABASE =====
 SUPABASE_URL = "https://ipqxjudlxcqacgtmpkzx.supabase.co"
@@ -18,10 +27,10 @@ def init_supabase():
     """Inizializza il client Supabase"""
     try:
         client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        print("✅ Connesso a Supabase")
+        logger.info("✅ Connesso a Supabase")
         return client
     except Exception as e:
-        print(f"❌ Errore connessione Supabase: {e}")
+        logger.error(f"❌ Errore connessione Supabase: {e}")
         traceback.print_exc()
         return None
 
@@ -461,6 +470,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
