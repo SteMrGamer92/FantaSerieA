@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 from supabase import create_client, Client
 import sys
-import traceback  # ✅ Per vedere gli errori completi
+import traceback
 
 # ===== CONFIGURAZIONE SUPABASE =====
 SUPABASE_URL = "https://ipqxjudlxcqacgtmpkzx.supabase.co"
@@ -59,7 +59,7 @@ def fetch_page(url):
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
             
-            print(f"  📡 Caricamento {url[:60]}...")
+            print(f"  📡 Caricamento pagina...")
             page.goto(url, timeout=60000)
             
             try:
@@ -424,6 +424,11 @@ def main():
         print("=" * 60)
         
         sys.exit(0 if error_count == 0 else 1)
+    
+    except Exception as e:
+        print(f"\n❌ ERRORE FATALE: {e}")
+        traceback.print_exc()
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
