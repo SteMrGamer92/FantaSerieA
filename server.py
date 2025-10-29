@@ -413,27 +413,19 @@ def update_matches():
 
         logger.info("Avvio scraper in BACKGROUND (detached)...")
 
-        # Comando: python scrap.py > scraper.log 2>&1 &
-        cmd = [
-            'nohup',
-            sys.executable, 'scrap.py',
-            '>', '/tmp/scraper.log',
-            '2>&1',
-            '&'
-        ]
-
-        # Esegui come shell command
+        # Comando: nohup python scrap.py > /tmp/scraper.log 2>&1 &
         subprocess.Popen(
-            ' '.join(cmd),
-            shell=True,
-            cwd=os.getcwd(),
-            preexec_fn=os.setsid  # Crea nuovo session group → ignora SIGTERM del parent
+            [sys.executable, 'scrap.py'],
+            stdout=open('/tmp/scraper.log', 'w'),
+            stderr=subprocess.STDOUT,
+            start_new_session=True,  # 🔥 Stacca completamente dal parent
+            cwd=os.getcwd()
         )
 
         return jsonify({
             'success': True,
-            'message': 'Scraper avviato in background. Log in /tmp/scraper.log (visibili in Render tra 10-20s)',
-            'log_hint': 'Vai su Render → Logs → cerca "SCRAPER" o scarica /tmp/scraper.log'
+            'message': 'Scraper avviato in background. Controlla i log tra qualche minuto.',
+            'log_hint': 'I log appariranno in /tmp/scraper.log tra 10-20 secondi'
         }), 202
 
     except Exception as e:
@@ -445,17 +437,18 @@ def update_matches():
 @app.route('/api/admin/scraper-log', methods=['GET'])
 @require_api_key
 def get_scraper_log():
+    """Legge gli ultimi 100 righe del log dello scraper"""
     try:
         log_path = '/tmp/scraper.log'
         if not os.path.exists(log_path):
             return jsonify({'success': False, 'error': 'Log non ancora creato'})
         
         with open(log_path, 'r') as f:
-            content = f.read()
+            lines = f.readlines()
         
         return jsonify({
             'success': True,
-            'log': content.splitlines()[-100:],  # ultime 100 righe
+            'log': lines[-100:],  # Ultime 100 righe
             'full_path': log_path
         })
     except Exception as e:
@@ -492,6 +485,7 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
 
 
 
