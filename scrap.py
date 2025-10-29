@@ -88,32 +88,86 @@ def insert_or_update_match(supabase, match_data):
         traceback.print_exc()
         return False
 
-def fetch_page(url):
-    """Recupera il contenuto HTML usando Playwright"""
-    try:
-        with sync_playwright() as p:
-            print(f"  🌐 Avvio browser...")
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            
-            print(f"  📡 Caricamento pagina...")
-            page.goto(url, timeout=60000)
-            
-            try:
-                page.wait_for_selector('div[class*="Box"]', timeout=30000)
-                page.wait_for_load_state('networkidle')
-                print(f"  ✅ Pagina caricata")
-            except Exception as e:
-                print(f"  ⏳ Timeout attesa elementi (continuo comunque)")
-            
-            html_content = page.content()
-            browser.close()
-            return html_content
-            
-    except Exception as e:
-        print(f"❌ Errore recupero pagina: {e}")
-        traceback.print_exc()
-        return None
+def fetch_page(url, max_retries=3):
+    """Recupera il contenuto HTML usando Playwright con retry"""
+    for attempt in range(max_retries):
+        try:
+            with sync_playwright() as p:
+                logger.info(f"  🌐 Avvio browser (tentativo {attempt + 1}/{max_retries})...")
+                
+                # Usa args per ottimizzare Chromium su server limitati
+                browser = p.chromium.launch(
+                    headless=True,
+                    args=[
+                        '--disable-gpu',
+                        '--disable-dev-shm-usage',
+                        '--disable-setuid-sandbox',
+                        '--no-sandbox',
+                        '--disable-web-security',
+                        '--disable-features=IsolateOrigins,site-per-process'
+                    ]
+                )
+                
+                context = browser.new_context(
+                    viewport={'width': 1920, 'height': 1080},
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                )
+                
+                page = context.new_page()
+                
+                logger.info(f"  📡 Caricamento {url[:60]}...")
+                
+                # Vai alla pagina
+                page.goto(url, wait_until='domcontentloaded', timeout=90000)
+                
+                # ATTENDI che gli elementi siano caricati (CRITICO per SofaScore)
+                logger.info("  ⏳ Attesa caricamento elementi...")
+                
+                try:
+                    # Attendi il selettore principale
+                    page.wait_for_selector('div[class*="Box"]', timeout=45000)
+                    logger.info("  ✅ Elementi Box trovati")
+                    
+                    # Attesa aggiuntiva per JavaScript
+                    time.sleep(5)  # 🔥 Lascia tempo al JS di popolare il DOM
+                    
+                    # Attendi lo stato di rete
+                    page.wait_for_load_state('networkidle', timeout=30000)
+                    logger.info("  ✅ Rete stabile")
+                    
+                except Exception as e:
+                    logger.warning(f"  ⚠️ Timeout attesa elementi: {e}")
+                    # Continua comunque, potrebbe essere caricato
+                
+                # Scorri la pagina per triggare lazy loading
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                time.sleep(2)
+                page.evaluate("window.scrollTo(0, 0)")
+                time.sleep(1)
+                
+                html_content = page.content()
+                
+                # Verifica che il contenuto sia valido
+                if len(html_content) < 10000:
+                    raise Exception(f"HTML troppo corto ({len(html_content)} bytes)")
+                
+                logger.info(f"  ✅ Pagina caricata ({len(html_content)} bytes)")
+                
+                browser.close()
+                return html_content
+        
+        except Exception as e:
+            logger.error(f"  ❌ Tentativo {attempt + 1} fallito: {e}")
+            if attempt < max_retries - 1:
+                wait_time = (attempt + 1) * 10
+                logger.info(f"  ⏳ Attendo {wait_time}s prima di riprovare...")
+                time.sleep(wait_time)
+            else:
+                logger.error("  ❌ Tutti i tentativi falliti")
+                traceback.print_exc()
+                return None
+    
+    return None
 
 def extract_match_id_from_url(href):
     """Estrae l'ID della partita dall'URL"""
@@ -127,44 +181,90 @@ def extract_match_id_from_url(href):
 def extract_match_hrefs(html_content):
     """Estrae gli href delle partite dalla pagina del torneo"""
     if not html_content:
-        print("❌ Nessun contenuto HTML ricevuto")
+        logger.error("❌ Nessun contenuto HTML ricevuto")
         return []
     
     try:
+        # 🔥 DEBUG: Salva l'HTML per analisi
+        debug_path = '/tmp/debug_html.html'
+        with open(debug_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        logger.info(f"🔍 HTML salvato in {debug_path} per debug")
+        
         tree = html.fromstring(html_content)
         results = []
         
         # Estrai numero giornata
         giornata_xpath = "//div[contains(@class, 'Box')]//button/span[contains(text(), 'Round')]"
         giornata_elements = tree.xpath(giornata_xpath)
+        
+        logger.info(f"🔍 Elementi giornata trovati: {len(giornata_elements)}")
+        
+        # 🔥 DEBUG: Prova XPath alternativi per giornata
+        if not giornata_elements:
+            logger.warning("⚠️ XPath giornata principale fallito, provo alternative...")
+            
+            # Alternative 1: Cerca qualsiasi "Round"
+            alt_xpath1 = "//span[contains(text(), 'Round')]"
+            giornata_elements = tree.xpath(alt_xpath1)
+            logger.info(f"🔍 Alt XPath 1: {len(giornata_elements)} elementi")
+            
+            # Alternative 2: Cerca numeri dopo "Round"
+            alt_xpath2 = "//*[contains(text(), 'Round')]"
+            giornata_elements = tree.xpath(alt_xpath2)
+            logger.info(f"🔍 Alt XPath 2: {len(giornata_elements)} elementi")
+        
         giornata_number = None
         
         if giornata_elements:
-            match = re.search(r'\d+', giornata_elements[0].text_content().strip())
-            giornata_number = int(match.group()) if match else None
+            for elem in giornata_elements:
+                text = elem.text_content().strip()
+                logger.info(f"🔍 Testo elemento giornata: '{text}'")
+                match = re.search(r'\d+', text)
+                if match:
+                    giornata_number = int(match.group())
+                    break
         
         if not giornata_number:
-            print("⚠️ Giornata non trovata")
-            return []
+            logger.error("⚠️ Giornata non trovata, tento estrazione da URL...")
+            # 🔥 FALLBACK: Estrai da URL se presente
+            # Cerca nel HTML qualsiasi riferimento a "Round X"
+            round_match = re.search(r'Round\s+(\d+)', html_content, re.IGNORECASE)
+            if round_match:
+                giornata_number = int(round_match.group(1))
+                logger.info(f"✅ Giornata estratta da testo: {giornata_number}")
+            else:
+                logger.error("❌ Impossibile estrarre giornata")
+                return []
         
-        print(f"📅 Giornata estratta: {giornata_number}")
+        logger.info(f"📅 Giornata estratta: {giornata_number}")
         
         # Estrai link partite
         xpath = "//div[contains(@class, 'Box')]//a[contains(@href, '/it/football/match/')]"
         elements = tree.xpath(xpath)
-        print(f"🔍 Trovate {len(elements)} partite")
+        logger.info(f"🔍 Link partite trovati: {len(elements)}")
+        
+        # 🔥 DEBUG: Se non trova niente, prova XPath più generici
+        if not elements:
+            logger.warning("⚠️ XPath partite principale fallito, provo alternative...")
+            
+            alt_xpath1 = "//a[contains(@href, '/match/')]"
+            elements = tree.xpath(alt_xpath1)
+            logger.info(f"🔍 Alt XPath partite: {len(elements)} elementi")
         
         for element in elements:
             href = element.get('href', '')
             if href and not href.startswith('https://'):
                 href = f"https://www.sofascore.com{href}"
-            if href:
+            if href and '/match/' in href:
                 results.append((giornata_number, href))
+                logger.info(f"  ➕ Aggiunta partita: {href[:80]}...")
         
+        logger.info(f"✅ Totale partite estratte: {len(results)}")
         return results
         
     except Exception as e:
-        print(f"❌ Errore extract_match_hrefs: {e}")
+        logger.error(f"❌ Errore extract_match_hrefs: {e}")
         traceback.print_exc()
         return []
 
@@ -470,6 +570,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
