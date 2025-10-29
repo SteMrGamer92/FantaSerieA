@@ -3,6 +3,7 @@ from lxml import html
 import os
 import time
 import re
+import subprocess
 from datetime import datetime, timedelta
 import pytz
 from supabase import create_client, Client
@@ -460,5 +461,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
