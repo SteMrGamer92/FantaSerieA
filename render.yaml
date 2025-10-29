@@ -19,9 +19,6 @@ services:
 
     buildCommand: >-
       python -m pip install --upgrade pip &&
-      python -m pip install -r requirements.txt &&
-      playwright install chromium --force &&
-      echo "Chromium path:" &&
-      find /opt/render/.cache/ms-playwright -name chrome -type f
+      python -m pip install -r requirements.txt
 
     startCommand: python scrap.py
