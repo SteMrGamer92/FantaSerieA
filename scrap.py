@@ -223,7 +223,7 @@ def extract_odds(tree):
     
     try:
         # METODO 1: XPath assoluti
-        xpath_quote1 = "/html/body/div[1]/main/div[1]/div[2]/div[2]/div/div[1]/div/div[2]/div/a[1]/div/span"
+        xpath_quote1 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[1]/div/span"
         xpath_quotex = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[2]/div/span"
         xpath_quote2 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[3]/div/span"
         
@@ -477,6 +477,7 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
 
 
