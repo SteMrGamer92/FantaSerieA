@@ -2,7 +2,6 @@ from playwright.sync_api import sync_playwright
 from lxml import html
 import time
 import re
-import os
 from datetime import datetime, timedelta
 import pytz
 from supabase import create_client, Client
@@ -10,8 +9,8 @@ import sys
 import traceback
 
 # ===== CONFIGURAZIONE SUPABASE =====
-SUPABASE_URL = os.getenv('SUPABASE_URL' , 'https://ipqxjudlxcqacgtmpkzx.supabase.co')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY' , 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwcXhqdWRseGNxYWNndG1wa3p4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTEyNjU3OSwiZXhwIjoyMDc0NzAyNTc5fQ.9nMpSeM-p5PvnF3rwMeR_zzXXocyfzYV24vau3AcDso')
+SUPABASE_URL = "https://ipqxjudlxcqacgtmpkzx.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwcXhqdWRseGNxYWNndG1wa3p4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTEyNjU3OSwiZXhwIjoyMDc0NzAyNTc5fQ.9nMpSeM-p5PvnF3rwMeR_zzXXocyfzYV24vau3AcDso"
 
 def init_supabase():
     """Inizializza il client Supabase"""
@@ -93,10 +92,10 @@ def fetch_page(url):
                 page.wait_for_selector('div[class*="Box"]', timeout=30000)
                 print("  ✅ Elementi trovati")
                 
-                # Attesa ridotta per JS
-                time.sleep(3)  # ✅ Ridotto da 5 a 3 secondi
+                # ✅ Attesa EXTRA per JavaScript (critico per quote)
+                time.sleep(8)  # ✅ Aumentato a 8 secondi per GitHub Actions
                 
-                page.wait_for_load_state('networkidle', timeout=20000)  # ✅ Ridotto da 30s
+                page.wait_for_load_state('networkidle', timeout=30000)
                 print("  ✅ Rete stabile")
                 
             except Exception as e:
@@ -477,8 +476,3 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
-
-
-
-
-
