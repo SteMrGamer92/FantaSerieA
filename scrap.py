@@ -39,9 +39,12 @@ def insert_or_update_match(supabase, match_data):
         exists = check_match_exists(supabase, match_id)
         
         if exists:
+            # ✅ UPDATE: Aggiorna solo i campi presenti in match_data
+            # Non sovrascrive le quote se non sono nel dict (partite finite)
             response = supabase.table('Partite').update(match_data).eq('id', match_id).execute()
             print(f"  🔄 Aggiornata partita ID {match_id}")
         else:
+            # ✅ INSERT: Crea nuova partita (quote potrebbero essere NULL se partita finita)
             response = supabase.table('Partite').insert(match_data).execute()
             print(f"  ✨ Creata nuova partita ID {match_id}")
         
@@ -89,17 +92,19 @@ def fetch_page(url):
             print("  ⏳ Attesa elementi...")
             
             try:
-                page.wait_for_selector('div[class*="Box"]', timeout=30000)
+                page.wait_for_selector('div[class*="Box"]', timeout=45000)  # ✅ 45s invece di 30s
                 print("  ✅ Elementi trovati")
                 
-                # ✅ Attesa EXTRA per JavaScript (critico per quote)
-                time.sleep(20)  # ✅ Aumentato a 8 secondi per GitHub Actions
+                # Attesa per JavaScript (CRITICO per quote)
+                time.sleep(5)  # ✅ 5 secondi invece di 3
                 
-                page.wait_for_load_state('networkidle', timeout=30000)
+                page.wait_for_load_state('networkidle', timeout=30000)  # ✅ 30s invece di 20s
                 print("  ✅ Rete stabile")
                 
             except Exception as e:
-                print(f"  ⚠️ Timeout attesa elementi (continuo)")
+                print(f"  ⚠️ Timeout attesa elementi")
+                # Se fallisce, aspetta comunque un po' prima di continuare
+                time.sleep(5)
             
             # Scorri per lazy loading
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
@@ -431,7 +436,14 @@ def main():
         
         data_match, ora, stato = extract_match_info(tree)
         goalcasa, goaltrasferta = extract_goals(tree, stato)
-        quote1, quotex, quote2 = extract_odds(tree)
+        
+        # ✅ Estrai quote SOLO per partite non ancora giocate (NG)
+        quote1, quotex, quote2 = None, None, None
+        if stato == 'NG':
+            quote1, quotex, quote2 = extract_odds(tree)
+            print(f"    ℹ️  Partita futura: quote estratte")
+        else:
+            print(f"    ℹ️  Partita finita/in corso: quote non estratte")
         
         # Crea oggetto partita
         match_data = {
@@ -444,11 +456,14 @@ def main():
             'stato': stato,
             'gcasa': goalcasa,
             'gtrasferta': goaltrasferta,
-            'quota1': quote1,
-            'quotax': quotex,
-            'quota2': quote2,
             'href': href
         }
+        
+        # ✅ Aggiungi quote SOLO se estratte (partite NG)
+        if quote1 and quotex and quote2:
+            match_data['quota1'] = quote1
+            match_data['quotax'] = quotex
+            match_data['quota2'] = quote2
         
         # Inserisci/aggiorna database
         if insert_or_update_match(supabase, match_data):
@@ -476,4 +491,3 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
-
