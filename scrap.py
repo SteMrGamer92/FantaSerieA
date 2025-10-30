@@ -2,6 +2,7 @@ from playwright.sync_api import sync_playwright
 from lxml import html
 import time
 import re
+import os
 from datetime import datetime, timedelta
 import pytz
 from supabase import create_client, Client
@@ -9,8 +10,8 @@ import sys
 import traceback
 
 # ===== CONFIGURAZIONE SUPABASE =====
-SUPABASE_URL = "https://ipqxjudlxcqacgtmpkzx.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwcXhqdWRseGNxYWNndG1wa3p4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTEyNjU3OSwiZXhwIjoyMDc0NzAyNTc5fQ.9nMpSeM-p5PvnF3rwMeR_zzXXocyfzYV24vau3AcDso"
+SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://ipqxjudlxcqacgtmpkzx.supabase.co')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwcXhqdWRseGNxYWNndG1wa3p4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTEyNjU3OSwiZXhwIjoyMDc0NzAyNTc5fQ.9nMpSeM-p5PvnF3rwMeR_zzXXocyfzYV24vau3AcDso')
 
 def init_supabase():
     """Inizializza il client Supabase"""
@@ -39,12 +40,9 @@ def insert_or_update_match(supabase, match_data):
         exists = check_match_exists(supabase, match_id)
         
         if exists:
-            # ✅ UPDATE: Aggiorna solo i campi presenti in match_data
-            # Non sovrascrive le quote se non sono nel dict (partite finite)
             response = supabase.table('Partite').update(match_data).eq('id', match_id).execute()
             print(f"  🔄 Aggiornata partita ID {match_id}")
         else:
-            # ✅ INSERT: Crea nuova partita (quote potrebbero essere NULL se partita finita)
             response = supabase.table('Partite').insert(match_data).execute()
             print(f"  ✨ Creata nuova partita ID {match_id}")
         
@@ -55,82 +53,66 @@ def insert_or_update_match(supabase, match_data):
         return False
 
 def fetch_page(url):
-    """
-    Recupera il contenuto HTML usando Playwright
-    OTTIMIZZATO per Render Free Tier (512MB RAM)
-    """
+    """Recupera il contenuto HTML usando Playwright con scroll multipli"""
     try:
         with sync_playwright() as p:
             print(f"  🌐 Avvio browser...")
             
-            # ✅ OTTIMIZZAZIONI per server con poca memoria
             browser = p.chromium.launch(
                 headless=True,
                 args=[
                     '--disable-gpu',
-                    '--disable-dev-shm-usage',  # Non usa /dev/shm (RAM limitata)
+                    '--disable-dev-shm-usage',
                     '--disable-setuid-sandbox',
                     '--no-sandbox',
                     '--disable-web-security'
                 ]
             )
             
-            # Context con viewport più grande
             context = browser.new_context(
-                viewport={'width': 1920, 'height': 1080},  # ✅ Viewport FULL HD
+                viewport={'width': 1920, 'height': 1080},
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             )
             
             page = context.new_page()
             
             print(f"  📡 Caricamento pagina...")
-            
-            # Vai alla pagina
             page.goto(url, wait_until='domcontentloaded', timeout=60000)
             
-            # ATTENDI che gli elementi siano caricati
             print("  ⏳ Attesa elementi...")
             
             try:
-                page.wait_for_selector('div[class*="Box"]', timeout=45000)  # ✅ 45s invece di 30s
+                page.wait_for_selector('div[class*="Box"]', timeout=45000)
                 print("  ✅ Elementi trovati")
                 
-                # ✅ SCROLL MULTIPLI per caricare lazy loading
                 print("  📜 Scroll pagina per caricare elementi...")
                 
-                # Scroll verso il basso gradualmente
                 for i in range(5):
                     page.evaluate(f"window.scrollTo(0, {(i + 1) * 500})")
                     time.sleep(0.5)
                 
-                # Scroll fino in fondo
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 time.sleep(2)
                 
-                # Scroll verso l'alto
                 page.evaluate("window.scrollTo(0, 0)")
                 time.sleep(1)
                 
-                # Scroll di nuovo in fondo (per sicurezza)
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 time.sleep(2)
                 
-                # Attesa per JavaScript (CRITICO per quote)
-                time.sleep(5)  # ✅ 5 secondi invece di 3
+                time.sleep(5)
                 
-                page.wait_for_load_state('networkidle', timeout=30000)  # ✅ 30s invece di 20s
+                page.wait_for_load_state('networkidle', timeout=30000)
                 print("  ✅ Rete stabile")
                 
             except Exception as e:
                 print(f"  ⚠️ Timeout attesa elementi")
-                # Se fallisce, aspetta comunque un po' prima di continuare
                 time.sleep(5)
             
             html_content = page.content()
             
             print(f"  ✅ HTML scaricato ({len(html_content)} bytes)")
             
-            # ✅ IMPORTANTE: Chiudi tutto per liberare memoria
             page.close()
             context.close()
             browser.close()
@@ -161,7 +143,6 @@ def extract_match_hrefs(html_content):
         tree = html.fromstring(html_content)
         results = []
         
-        # Estrai numero giornata
         giornata_xpath = "//div[contains(@class, 'Box')]//button/span[contains(text(), 'Round')]"
         giornata_elements = tree.xpath(giornata_xpath)
         giornata_number = None
@@ -176,7 +157,6 @@ def extract_match_hrefs(html_content):
         
         print(f"📅 Giornata estratta: {giornata_number}")
         
-        # Estrai link partite
         xpath = "//div[contains(@class, 'Box')]//a[contains(@href, '/it/football/match/')]"
         elements = tree.xpath(xpath)
         print(f"🔍 Trovate {len(elements)} partite")
@@ -201,7 +181,6 @@ def extract_team_names(tree):
     squadra_trasferta = None
     
     try:
-        # METODO 1: XPath assoluti per partita NON GIOCATA
         xpath_casa_ng = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div/div[1]/div/a/div/div/bdi"
         xpath_trasferta_ng = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div/div[3]/div/a/div/div/bdi"
         
@@ -215,7 +194,6 @@ def extract_team_names(tree):
             squadra_trasferta = trasferta_elements[0].text_content().strip()
             print(f"    ✈️  Trasferta: {squadra_trasferta}")
         
-        # METODO 2: Fallback
         if not squadra_casa or not squadra_trasferta:
             print("    ⚠️  XPath assoluti falliti, provo fallback...")
             xpath_teams_fallback = "//a[contains(@href, '/team/')]//bdi"
@@ -240,7 +218,6 @@ def extract_odds(tree):
     quote2 = None
     
     try:
-        # METODO 1: XPath assoluti
         xpath_quote1 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[1]/div/span"
         xpath_quotex = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[2]/div/span"
         xpath_quote2 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[3]/div/span"
@@ -266,7 +243,6 @@ def extract_odds(tree):
                 quote2 = float(text)
                 print(f"    2️⃣  Quota 2: {quote2}")
         
-        # METODO 2: Fallback
         if not all([quote1, quotex, quote2]):
             print("    ⚠️  XPath assoluti falliti, provo fallback...")
             xpath_fallback = "//div[contains(text(), 'Esito finale') or contains(text(), '1X2')]/following-sibling::div//span[contains(text(), '.')]"
@@ -297,7 +273,6 @@ def extract_match_info(tree):
     stato = None
     
     try:
-        # Estrai data
         data_xpath = "//span[contains(text(), 'Oggi') or contains(text(), 'Domani') or contains(text(), '/202') or contains(text(), '-202')]"
         data_elements = tree.xpath(data_xpath)
         
@@ -317,7 +292,6 @@ def extract_match_info(tree):
                 data = text
                 break
         
-        # Estrai ora
         ora_xpath = "//span[contains(text(), ':') and string-length(text()) <= 5 and string-length(text()) >= 4]"
         ora_elements = tree.xpath(ora_xpath)
         
@@ -327,7 +301,6 @@ def extract_match_info(tree):
                 ora = text + ":00"
                 break
         
-        # Determina stato
         if data and ora:
             match_datetime = datetime.strptime(f"{data} {ora[:5]}", '%Y-%m-%d %H:%M')
             cest = pytz.timezone('Europe/Rome')
@@ -354,137 +327,13 @@ def extract_goals(tree, stato):
     goaltrasferta = None
     
     try:
-        # METODO 1: Cerca score separati (più affidabile)
         score_xpath = "//div[contains(@class, 'score')]//span[string-length(text()) <= 2 and string-length(text()) >= 1]"
         score_elements = tree.xpath(score_xpath)
         
         scores = []
         for element in score_elements:
             text = element.text_content().strip()
-            if re.match(r'^\d+
-
-def main():
-    print("=" * 60)
-    print("🚀 Avvio scraping Serie A")
-    print("=" * 60)
-    
-    supabase = init_supabase()
-    if not supabase:
-        print("❌ Impossibile connettersi a Supabase")
-        sys.exit(1)
-    
-    tournament_url = 'https://www.sofascore.com/it/torneo/calcio/italy/serie-a/23#id:76457#tab:matches'
-    
-    print("\n📡 Recupero pagina torneo...")
-    html_content = fetch_page(tournament_url)
-    if not html_content:
-        print("❌ Impossibile recuperare contenuto pagina")
-        sys.exit(1)
-    
-    data = extract_match_hrefs(html_content)
-    
-    if not data:
-        print("❌ Nessuna partita trovata")
-        sys.exit(1)
-    
-    print(f"\n🔄 Elaborazione {len(data)} partite...\n")
-    
-    success_count = 0
-    error_count = 0
-    
-    for idx, (giornata, href) in enumerate(data, 1):
-        print(f"[{idx}/{len(data)}] " + "=" * 50)
-        
-        match_id = extract_match_id_from_url(href)
-        if not match_id:
-            print(f"  ⚠️  SKIP: ID non valido")
-            error_count += 1
-            continue
-        
-        print(f"  🆔 ID Partita: {match_id}")
-        
-        # Apri pagina quote
-        odds_url = f"{href},tab:additional_odds"
-        odds_html = fetch_page(odds_url)
-        
-        if not odds_html:
-            print(f"  ❌ Errore caricamento pagina")
-            error_count += 1
-            continue
-        
-        tree = html.fromstring(odds_html)
-        
-        # Estrai dati
-        squadra_casa, squadra_trasferta = extract_team_names(tree)
-        
-        if not squadra_casa or not squadra_trasferta:
-            print(f"  ⚠️  SKIP: Impossibile estrarre squadre")
-            error_count += 1
-            continue
-        
-        data_match, ora, stato = extract_match_info(tree)
-        goalcasa, goaltrasferta = extract_goals(tree, stato)
-        
-        # ✅ Estrai quote SOLO per partite non ancora giocate (NG)
-        quote1, quotex, quote2 = None, None, None
-        if stato == 'NG':
-            quote1, quotex, quote2 = extract_odds(tree)
-            if quote1 and quotex and quote2:
-                print(f"    ℹ️  Partita futura: quote estratte")
-            else:
-                print(f"    ⚠️  Quote non disponibili, SKIP")
-                error_count += 1
-                continue
-        else:
-            print(f"    ℹ️  Partita {stato}: solo dati partita (no quote)")
-        
-        # Crea oggetto partita
-        match_data = {
-            'id': match_id,
-            'giornata': giornata,
-            'casa': squadra_casa,
-            'trasferta': squadra_trasferta,
-            'data': data_match,
-            'ora': ora,
-            'stato': stato,
-            'gcasa': goalcasa,
-            'gtrasferta': goaltrasferta,
-            'href': href
-        }
-        
-        # ✅ Aggiungi quote SOLO se estratte (partite NG)
-        if quote1 and quotex and quote2:
-            match_data['quota1'] = quote1
-            match_data['quotax'] = quotex
-            match_data['quota2'] = quote2
-        
-        # Inserisci/aggiorna database
-        if insert_or_update_match(supabase, match_data):
-            success_count += 1
-        else:
-            error_count += 1
-        
-        print()
-        time.sleep(2)  # ✅ Ridotto da 3s per velocizzare
-    
-    print("=" * 60)
-    print("✅ Sincronizzazione completata")
-    print("=" * 60)
-    print(f"📊 Partite elaborate: {len(data)}")
-    print(f"✅ Successi: {success_count}")
-    print(f"❌ Errori: {error_count}")
-    print("=" * 60)
-    
-    sys.exit(0 if error_count == 0 else 1)
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"\n❌ ERRORE FATALE: {e}")
-        traceback.print_exc()
-        sys.exit(1)
-, text):
+            if re.match(r'^\d+$', text):
                 scores.append(int(text))
         
         if len(scores) >= 2:
@@ -493,142 +342,18 @@ if __name__ == "__main__":
             print(f"    ⚽ Goal (metodo 1): {goalcasa}-{goaltrasferta}")
             return goalcasa, goaltrasferta
         
-        # METODO 2: Cerca punteggio completo X-Y
         score_full_xpath = "//span[contains(text(), '-') and string-length(text()) <= 7]"
         elements = tree.xpath(score_full_xpath)
         
         for element in elements:
             text = element.text_content().strip()
-            if re.match(r'^\d+\s*-\s*\d+
-
-def main():
-    print("=" * 60)
-    print("🚀 Avvio scraping Serie A")
-    print("=" * 60)
-    
-    supabase = init_supabase()
-    if not supabase:
-        print("❌ Impossibile connettersi a Supabase")
-        sys.exit(1)
-    
-    tournament_url = 'https://www.sofascore.com/it/torneo/calcio/italy/serie-a/23#id:76457#tab:matches'
-    
-    print("\n📡 Recupero pagina torneo...")
-    html_content = fetch_page(tournament_url)
-    if not html_content:
-        print("❌ Impossibile recuperare contenuto pagina")
-        sys.exit(1)
-    
-    data = extract_match_hrefs(html_content)
-    
-    if not data:
-        print("❌ Nessuna partita trovata")
-        sys.exit(1)
-    
-    print(f"\n🔄 Elaborazione {len(data)} partite...\n")
-    
-    success_count = 0
-    error_count = 0
-    
-    for idx, (giornata, href) in enumerate(data, 1):
-        print(f"[{idx}/{len(data)}] " + "=" * 50)
-        
-        match_id = extract_match_id_from_url(href)
-        if not match_id:
-            print(f"  ⚠️  SKIP: ID non valido")
-            error_count += 1
-            continue
-        
-        print(f"  🆔 ID Partita: {match_id}")
-        
-        # Apri pagina quote
-        odds_url = f"{href},tab:additional_odds"
-        odds_html = fetch_page(odds_url)
-        
-        if not odds_html:
-            print(f"  ❌ Errore caricamento pagina")
-            error_count += 1
-            continue
-        
-        tree = html.fromstring(odds_html)
-        
-        # Estrai dati
-        squadra_casa, squadra_trasferta = extract_team_names(tree)
-        
-        if not squadra_casa or not squadra_trasferta:
-            print(f"  ⚠️  SKIP: Impossibile estrarre squadre")
-            error_count += 1
-            continue
-        
-        data_match, ora, stato = extract_match_info(tree)
-        goalcasa, goaltrasferta = extract_goals(tree, stato)
-        
-        # ✅ SALTA partite finite/in corso (aggiorna solo partite future)
-        if stato in ['F', 'IC']:
-            print(f"    ⏭️  SKIP: Partita {stato}, non aggiorno database")
-            continue
-        
-        # Estrai quote solo per partite NG
-        quote1, quotex, quote2 = extract_odds(tree)
-        
-        if not all([quote1, quotex, quote2]):
-            print(f"    ⚠️  SKIP: Quote non disponibili")
-            error_count += 1
-            continue
-        
-        print(f"    ℹ️  Partita futura: quote estratte")
-        
-        # Crea oggetto partita (solo per partite NG con quote)
-        match_data = {
-            'id': match_id,
-            'giornata': giornata,
-            'casa': squadra_casa,
-            'trasferta': squadra_trasferta,
-            'data': data_match,
-            'ora': ora,
-            'stato': stato,
-            'gcasa': goalcasa,
-            'gtrasferta': goaltrasferta,
-            'quota1': quote1,
-            'quotax': quotex,
-            'quota2': quote2,
-            'href': href
-        }
-        
-        # Inserisci/aggiorna database
-        if insert_or_update_match(supabase, match_data):
-            success_count += 1
-        else:
-            error_count += 1
-        
-        print()
-        time.sleep(2)  # ✅ Ridotto da 3s per velocizzare
-    
-    print("=" * 60)
-    print("✅ Sincronizzazione completata")
-    print("=" * 60)
-    print(f"📊 Partite elaborate: {len(data)}")
-    print(f"✅ Successi: {success_count}")
-    print(f"❌ Errori: {error_count}")
-    print("=" * 60)
-    
-    sys.exit(0 if error_count == 0 else 1)
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print(f"\n❌ ERRORE FATALE: {e}")
-        traceback.print_exc()
-        sys.exit(1)
-, text):
+            if re.match(r'^\d+\s*-\s*\d+$', text):
                 parts = text.split('-')
                 goalcasa = int(parts[0].strip())
                 goaltrasferta = int(parts[1].strip())
                 print(f"    ⚽ Goal (metodo 2): {goalcasa}-{goaltrasferta}")
                 return goalcasa, goaltrasferta
         
-        # METODO 3: Cerca nel testo qualsiasi pattern X-Y
         full_text = tree.text_content()
         score_match = re.search(r'\b(\d{1,2})\s*-\s*(\d{1,2})\b', full_text)
         if score_match:
@@ -637,7 +362,7 @@ if __name__ == "__main__":
             print(f"    ⚽ Goal (metodo 3): {goalcasa}-{goaltrasferta}")
             return goalcasa, goaltrasferta
         
-        print(f"    ⚠️ Goal non trovati (partita finita senza risultato visibile)")
+        print(f"    ⚠️ Goal non trovati")
     
     except Exception as e:
         print(f"    ❌ Errore extract_goals: {e}")
@@ -685,7 +410,6 @@ def main():
         
         print(f"  🆔 ID Partita: {match_id}")
         
-        # Apri pagina quote
         odds_url = f"{href},tab:additional_odds"
         odds_html = fetch_page(odds_url)
         
@@ -696,7 +420,6 @@ def main():
         
         tree = html.fromstring(odds_html)
         
-        # Estrai dati
         squadra_casa, squadra_trasferta = extract_team_names(tree)
         
         if not squadra_casa or not squadra_trasferta:
@@ -707,22 +430,18 @@ def main():
         data_match, ora, stato = extract_match_info(tree)
         goalcasa, goaltrasferta = extract_goals(tree, stato)
         
-        # ✅ SALTA partite finite/in corso (aggiorna solo partite future)
-        if stato in ['F', 'IC']:
-            print(f"    ⏭️  SKIP: Partita {stato}, non aggiorno database")
-            continue
+        quote1, quotex, quote2 = None, None, None
+        if stato == 'NG':
+            quote1, quotex, quote2 = extract_odds(tree)
+            if quote1 and quotex and quote2:
+                print(f"    ℹ️  Partita futura: quote estratte")
+            else:
+                print(f"    ⚠️  Quote non disponibili, SKIP")
+                error_count += 1
+                continue
+        else:
+            print(f"    ℹ️  Partita {stato}: solo dati partita (no quote)")
         
-        # Estrai quote solo per partite NG
-        quote1, quotex, quote2 = extract_odds(tree)
-        
-        if not all([quote1, quotex, quote2]):
-            print(f"    ⚠️  SKIP: Quote non disponibili")
-            error_count += 1
-            continue
-        
-        print(f"    ℹ️  Partita futura: quote estratte")
-        
-        # Crea oggetto partita (solo per partite NG con quote)
         match_data = {
             'id': match_id,
             'giornata': giornata,
@@ -733,20 +452,21 @@ def main():
             'stato': stato,
             'gcasa': goalcasa,
             'gtrasferta': goaltrasferta,
-            'quota1': quote1,
-            'quotax': quotex,
-            'quota2': quote2,
             'href': href
         }
         
-        # Inserisci/aggiorna database
+        if quote1 and quotex and quote2:
+            match_data['quota1'] = quote1
+            match_data['quotax'] = quotex
+            match_data['quota2'] = quote2
+        
         if insert_or_update_match(supabase, match_data):
             success_count += 1
         else:
             error_count += 1
         
         print()
-        time.sleep(2)  # ✅ Ridotto da 3s per velocizzare
+        time.sleep(2)
     
     print("=" * 60)
     print("✅ Sincronizzazione completata")
