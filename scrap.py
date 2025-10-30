@@ -2,6 +2,7 @@ from playwright.sync_api import sync_playwright
 from lxml import html
 import time
 import re
+import os
 from datetime import datetime, timedelta
 import pytz
 from supabase import create_client, Client
@@ -476,4 +477,5 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
