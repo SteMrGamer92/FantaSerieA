@@ -93,7 +93,7 @@ def fetch_page(url):
                 print("  ✅ Elementi trovati")
                 
                 # ✅ Attesa EXTRA per JavaScript (critico per quote)
-                time.sleep(8)  # ✅ Aumentato a 8 secondi per GitHub Actions
+                time.sleep(20)  # ✅ Aumentato a 8 secondi per GitHub Actions
                 
                 page.wait_for_load_state('networkidle', timeout=30000)
                 print("  ✅ Rete stabile")
@@ -476,3 +476,4 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
