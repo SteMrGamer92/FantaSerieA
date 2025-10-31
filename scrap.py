@@ -240,94 +240,19 @@ def extract_team_names(tree):
     return squadra_casa, squadra_trasferta
 
 def extract_odds(tree):
-    """Estrae le quote 1, X, 2 con metodi multipli"""
-    quote1 = None
-    quotex = None
-    quote2 = None
-    
+    """Estrae quote 1X2 dalla sidebar destra"""
     try:
-        # ✅ METODO 1: XPath assoluto (FUNZIONA)
-        xpath_quote1 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[1]/div/span"
-        xpath_quotex = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[2]/div/span"
-        xpath_quote2 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[3]/div/span"
-        
-        q1_elements = tree.xpath(xpath_quote1)
-        qx_elements = tree.xpath(xpath_quotex)
-        q2_elements = tree.xpath(xpath_quote2)
-        
-        if q1_elements and qx_elements and q2_elements:
-            text1 = q1_elements[0].text_content().strip()
-            textx = qx_elements[0].text_content().strip()
-            text2 = q2_elements[0].text_content().strip()
-            
-            if all(re.match(r'^\d+\.\d+$', t) for t in [text1, textx, text2]):
-                quote1 = float(text1)
-                quotex = float(textx)
-                quote2 = float(text2)
-                print(f"    1️⃣  Quota 1: {quote1}")
-                print(f"    ❌ Quota X: {quotex}")
-                print(f"    2️⃣  Quota 2: {quote2}")
-                return quote1, quotex, quote2
-        
-        # ✅ METODO 2: XPath con classe CSS (FUNZIONA)
-        print("    ⚠️  Metodo 1 fallito, provo Metodo 2...")
-        xpath_class = "//div[contains(@class, 'd_flex') and contains(@class, 'ai_center')]//a//span[contains(@class, 'textStyle_display')]"
-        elements = tree.xpath(xpath_class)
-        
-        quotes = []
-        for element in elements:
-            text = element.text_content().strip()
-            if re.match(r'^\d+\.\d+$', text):
-                try:
-                    quota = float(text)
-                    # ✅ FILTRO: solo quote realistiche (1.00 - 50.00)
-                    if 1.0 <= quota <= 50.0:
-                        quotes.append(quota)
-                        if len(quotes) == 3:  # ✅ STOP AI PRIMI 3
-                            break
-                except ValueError:
-                    continue
-        
-        if len(quotes) >= 3:
-            quote1, quotex, quote2 = quotes[0], quotes[1], quotes[2]
-            print(f"    1️⃣  Quota 1 (metodo 2): {quote1}")
-            print(f"    ❌ Quota X (metodo 2): {quotex}")
-            print(f"    2️⃣  Quota 2 (metodo 2): {quote2}")
-            return quote1, quotex, quote2
-        
-        # ✅ METODO 3: Pattern numerico GLOBALE (ULTIMA RISORSA)
-        print("    ⚠️  Metodo 2 fallito, provo Metodo 3 (pattern globale)...")
-        all_spans = tree.xpath("//span")
-        quotes = []
-        
-        for span in all_spans:
-            text = span.text_content().strip()
-            if re.match(r'^\d+\.\d+$', text):
-                try:
-                    quota = float(text)
-                    print(f"{quota}")
-                    # ✅ FILTRO: solo quote realistiche
-                    if 1.0 <= quota <= 50.0:
-                        quotes.append(quota)
-                        if len(quotes) == 3:  # ✅ STOP AI PRIMI 3
-                            break
-                except ValueError:
-                    continue
-        
-        if len(quotes) >= 3:
-            quote1, quotex, quote2 = quotes[0], quotes[1], quotes[2]
-            print(f"    1️⃣  Quota 1 (metodo 3): {quote1}")
-            print(f"    ❌ Quota X (metodo 3): {quotex}")
-            print(f"    2️⃣  Quota 2 (metodo 3): {quote2}")
-            return quote1, quotex, quote2
-        
-        print("    ❌ NESSUN METODO HA TROVATO LE QUOTE")
-    
-    except Exception as e:
-        print(f"    ❌ Errore extract_odds: {e}")
-        traceback.print_exc()
-    
-    return None, None, None
+        # Trova la sidebar con le quote
+        sidebar = tree.xpath('//div[contains(@class, "sc-bczRLg")]//span/text()')
+        if len(sidebar) >= 3:
+            q1 = float(sidebar[0].strip())
+            qx = float(sidebar[1].strip())
+            q2 = float(sidebar[2].strip())
+            return q1, qx, q2
+        else:
+            return None, None, None
+    except:
+        return None, None, None
 
 def extract_match_info(tree):
     """Estrae data, ora e stato della partita"""
@@ -582,6 +507,7 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
 
 
