@@ -46,58 +46,58 @@ on:
     - cron: '30 18 * * 1'   # 20:30 IT (15 min prima)
     - cron: '45 20 * * 1'   # 22:45 IT (2h dopo inizio)
   
-workflow_dispatch:
-
-jobs:
-  scrape:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4  # ✅ Aggiornato anche questo
+  workflow_dispatch:
+  
+  jobs:
+    scrape:
+      runs-on: ubuntu-latest
+      timeout-minutes: 30
       
-      - name: 🐍 Setup Python 3.12
-        uses: actions/setup-python@v5  # ✅ Aggiornato
-        with:
-          python-version: '3.12'
-      
-      - name: 📦 Install dependencies
-        run: |
-          pip install playwright lxml pytz supabase
-          playwright install chromium --with-deps
-      
-      - name: 🚀 Run scraper
-        run: python scrap.py
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-        continue-on-error: true
-      
-      # ✅ UPLOAD ARTIFACT V4
-      - name: 📤 Upload HTML debug files
-        if: always()
-        uses: actions/upload-artifact@v4  # ✅ Versione aggiornata
-        with:
-          name: html-debug-files
-          path: /tmp/match_*.html
-          retention-days: 7
-          if-no-files-found: warn  # ✅ Non fallire se non ci sono file
-      
-      # ✅ UPLOAD SCREENSHOT V4
-      - name: 📸 Upload screenshots
-        if: always()
-        uses: actions/upload-artifact@v4  # ✅ Versione aggiornata
-        with:
-          name: screenshots
-          path: /tmp/screenshot_*.png
-          retention-days: 7
-          if-no-files-found: warn
-      
-      - name: 📊 Log risultato
-        if: always()
-        run: |
-          echo "✅ Scraping completato alle $(date)"
-          echo "📁 File generati:"
-          ls -lh /tmp/match_*.html 2>/dev/null || echo "  Nessun HTML"
-          ls -lh /tmp/screenshot_*.png 2>/dev/null || echo "  Nessuno screenshot"
+      steps:
+        - name: 📥 Checkout repository
+          uses: actions/checkout@v4  # ✅ Aggiornato anche questo
+        
+        - name: 🐍 Setup Python 3.12
+          uses: actions/setup-python@v5  # ✅ Aggiornato
+          with:
+            python-version: '3.12'
+        
+        - name: 📦 Install dependencies
+          run: |
+            pip install playwright lxml pytz supabase
+            playwright install chromium --with-deps
+        
+        - name: 🚀 Run scraper
+          run: python scrap.py
+          env:
+            SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+            SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          continue-on-error: true
+        
+        # ✅ UPLOAD ARTIFACT V4
+        - name: 📤 Upload HTML debug files
+          if: always()
+          uses: actions/upload-artifact@v4  # ✅ Versione aggiornata
+          with:
+            name: html-debug-files
+            path: /tmp/match_*.html
+            retention-days: 7
+            if-no-files-found: warn  # ✅ Non fallire se non ci sono file
+        
+        # ✅ UPLOAD SCREENSHOT V4
+        - name: 📸 Upload screenshots
+          if: always()
+          uses: actions/upload-artifact@v4  # ✅ Versione aggiornata
+          with:
+            name: screenshots
+            path: /tmp/screenshot_*.png
+            retention-days: 7
+            if-no-files-found: warn
+        
+        - name: 📊 Log risultato
+          if: always()
+          run: |
+            echo "✅ Scraping completato alle $(date)"
+            echo "📁 File generati:"
+            ls -lh /tmp/match_*.html 2>/dev/null || echo "  Nessun HTML"
+            ls -lh /tmp/screenshot_*.png 2>/dev/null || echo "  Nessuno screenshot"
