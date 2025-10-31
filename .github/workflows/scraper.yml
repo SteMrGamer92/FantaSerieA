@@ -72,9 +72,18 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-      
+
+      # ✅ SALVA HTML COME ARTIFACT
+      - name: 📤 Upload HTML debug files
+        if: always()  # Esegui anche se scraper fallisce
+        uses: actions/upload-artifact@v3
+        with:
+          name: html-debug-files
+          path: /tmp/match_*.html
+          retention-days: 1  # Conserva per 7 giorni
+          
       - name: 📊 Log risultato
         if: always()
         run: |
-          echo "✅ Scraping completato alle $(date)"
-          echo "🕐 Prossima esecuzione: vedi schedule cron"
+          echo "✅ Scraping completato"
+          ls -lh /tmp/match_*.html 2>/dev/null || echo "Nessun file HTML generato"
