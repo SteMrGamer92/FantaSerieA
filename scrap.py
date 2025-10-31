@@ -338,7 +338,7 @@ def extract_goals(tree, stato):
     goalcasa = None
     goaltrasferta = None
     
-    try:        
+    try:
         # XPath assoluti esatti forniti
         xpath_goalcasa = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[1]"
         xpath_goaltrasferta = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[3]"
@@ -356,7 +356,7 @@ def extract_goals(tree, stato):
             try:
                 goalcasa = int(goalcasa_text)
                 goaltrasferta = int(goaltrasferta_text)
-                print(f"    ⚽ Goal (metodo 1): {goalcasa}-{goaltrasferta}")
+                print(f"    ⚽ Goal (XPath esatti): {goalcasa}-{goaltrasferta}")
                 return goalcasa, goaltrasferta
             except ValueError:
                 print("    Errore: uno dei valori non è un numero valido.")
@@ -365,7 +365,7 @@ def extract_goals(tree, stato):
             print("    Elementi non trovati con gli XPath specificati.")
             return None, None
 
-         score_xpath = "//div[contains(@class, 'score')]//span[string-length(text()) <= 2 and string-length(text()) >= 1]"
+        score_xpath = "//div[contains(@class, 'score')]//span[string-length(text()) <= 2 and string-length(text()) >= 1]"
         score_elements = tree.xpath(score_xpath)
         
         scores = []
@@ -377,9 +377,10 @@ def extract_goals(tree, stato):
         if len(scores) >= 2:
             goalcasa = scores[0]
             goaltrasferta = scores[1]
-            print(f"    ⚽ Goal (metodo 2): {goalcasa}-{goaltrasferta}")
+            print(f"    ⚽ Goal (metodo 1): {goalcasa}-{goaltrasferta}")
             return goalcasa, goaltrasferta
-            
+        
+        
         full_text = tree.text_content()
         score_match = re.search(r'\b(\d{1,2})\s*-\s*(\d{1,2})\b', full_text)
         if score_match:
@@ -511,5 +512,3 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
-
-
