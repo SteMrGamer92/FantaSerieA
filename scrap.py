@@ -53,86 +53,62 @@ def insert_or_update_match(supabase, match_data):
         return False
 
 def fetch_page(url):
-    """Recupera HTML con robustezza per GitHub Actions"""
     try:
         with sync_playwright() as p:
-            print(f"  Avvio browser per {url.split('#')[0]}")
-            
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--disable-web-security',
-                    '--disable-features=IsolateOrigins,site-per-process',
-                    '--disable-site-isolation-trials',
-                    '--window-size=1920,1080'
-                ]
-            )
-            
+            browser = p.chromium.launch(headless=True, args=[
+                '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
+                '--window-size=1400,900'
+            ])
             context = browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-                java_script_enabled=True,
-                locale='it-IT',
-                timezone_id='Europe/Rome'
+                viewport={'width': 1400, 'height': 900},  # Largo ma realistico
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                device_scale_factor=1,
+                has_touch=False,
+                is_mobile=False,
+                locale='it-IT'
             )
-            
             page = context.new_page()
-            
-            # Intercetta e blocca richieste non necessarie (opzionale)
-            page.route("**/*.{png,jpg,jpeg,gif,svg,css,woff,woff2}", lambda route: route.abort())
-            
-            print(f"  Caricamento pagina...")
+
+            # Blocca risorse pesanti
+            page.route("**/*.{png,jpg,css,woff,svg,gif}", lambda route: route.abort())
+
+            print(f"  📡 Caricamento: {url}")
             page.goto(url, wait_until='domcontentloaded', timeout=90000)
-            
-            print("  Attesa elementi dinamici...")
-            selectors_to_wait = [
-                'div[class*="MatchCard"]',
-                'a[href*="/it/football/match/"]',
-                'button:has-text("Round")'
-            ]
-            
-            for selector in selectors_to_wait:
+
+            # === SOLO PER PAGINE PARTITA CON #tab:additional_odds ===
+            if "match" in url and "additional_odds" in url:
+                # 1. Prova sidebar (desktop)
+                if not wait_for_sidebar_odds(page):
+                    # 2. Fallback: clicca tab
+                    if not click_odds_tab(page):
+                        print("  ❌ Quote non caricabili")
+                        return None
+
+                # Scroll leggero per triggerare lazy load
+                page.evaluate("window.scrollBy(0, 400)")
+                time.sleep(2)
+
+                # Attesa rete
                 try:
-                    page.wait_for_selector(selector, timeout=30000)
+                    page.wait_for_load_state('networkidle', timeout=30000)
                 except:
-                    pass  # Continua comunque
-            
-            print("  Scroll aggressivo...")
-            for i in range(10):
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(1.2)
-            
-            page.evaluate("window.scrollTo(0, 0)")
-            time.sleep(1)
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            time.sleep(3)
-            
-            # Attesa finale rete stabile
-            try:
-                page.wait_for_load_state('networkidle', timeout=45000)
-            except:
-                print("  Warning: networkidle non raggiunto, forzatura attesa...")
-                time.sleep(12)
-            
-            html_content = page.content()
-            size_kb = len(html_content) / 1024
-            print(f"  HTML scaricato: {size_kb:.1f} KB")
-            
-            page.close()
-            context.close()
-            browser.close()
-            
-            if size_kb < 500:
-                print(f"  Warning: HTML troppo piccolo ({size_kb:.1f} KB), possibile caricamento parziale")
-            
-            return html_content
-            
+                    time.sleep(6)
+
+            else:
+                # Torneo: scroll classico
+                for _ in range(5):
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    time.sleep(1)
+
+            html = page.content()
+            size = len(html) / 1024
+            print(f"  ✅ HTML: {size:.1f} KB")
+            if "additional_odds" in url and size < 1000:
+                print(f"  ⚠️ HTML piccolo per pagina quote: {size:.1f} KB")
+            return html
+
     except Exception as e:
-        print(f"Error: Errore recupero pagina: {e}")
+        print(f"❌ Errore: {e}")
         traceback.print_exc()
         return None
 
@@ -396,6 +372,28 @@ def extract_goals(tree, stato):
         traceback.print_exc()
     
     return goalcasa, goaltrasferta
+
+def wait_for_sidebar_odds(page):
+    try:
+        print("  🔍 Attesa quote in sidebar...")
+        page.wait_for_selector(
+            "div:has-text('1X2') ~ div span:text-matches('[0-9]+\\.[0-9]+')",
+            timeout=25000
+        )
+        print("  ✅ Quote in sidebar!")
+        return True
+    except:
+        return False
+
+def click_odds_tab(page):
+    try:
+        print("  🔄 Click tab 'Quote'...")
+        page.click("a:has-text('Quote')", timeout=15000)
+        page.wait_for_selector("span:text-matches('[0-9]+\\.[0-9]+')", timeout=25000)
+        print("  ✅ Tab caricata")
+        return True
+    except:
+        return False
 
 def main():
     print("=" * 60)
