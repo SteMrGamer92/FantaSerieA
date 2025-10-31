@@ -53,74 +53,86 @@ def insert_or_update_match(supabase, match_data):
         return False
 
 def fetch_page(url):
-    """Recupera il contenuto HTML usando Playwright con scroll multipli"""
+    """Recupera HTML con robustezza per GitHub Actions"""
     try:
         with sync_playwright() as p:
-            print(f"  🌐 Avvio browser...")
+            print(f"  Avvio browser per {url.split('#')[0]}")
             
             browser = p.chromium.launch(
                 headless=True,
                 args=[
-                    '--disable-gpu',
-                    '--disable-dev-shm-usage',
-                    '--disable-setuid-sandbox',
                     '--no-sandbox',
-                    '--disable-web-security'
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-gpu',
+                    '--disable-web-security',
+                    '--disable-features=IsolateOrigins,site-per-process',
+                    '--disable-site-isolation-trials',
+                    '--window-size=1920,1080'
                 ]
             )
             
             context = browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+                java_script_enabled=True,
+                locale='it-IT',
+                timezone_id='Europe/Rome'
             )
             
             page = context.new_page()
             
-            print(f"  📡 Caricamento pagina...")
-            page.goto(url, wait_until='domcontentloaded', timeout=60000)
+            # Intercetta e blocca richieste non necessarie (opzionale)
+            page.route("**/*.{png,jpg,jpeg,gif,svg,css,woff,woff2}", lambda route: route.abort())
             
-            print("  ⏳ Attesa elementi...")
+            print(f"  Caricamento pagina...")
+            page.goto(url, wait_until='domcontentloaded', timeout=90000)
             
+            print("  Attesa elementi dinamici...")
+            selectors_to_wait = [
+                'div[class*="MatchCard"]',
+                'a[href*="/it/football/match/"]',
+                'button:has-text("Round")'
+            ]
+            
+            for selector in selectors_to_wait:
+                try:
+                    page.wait_for_selector(selector, timeout=30000)
+                except:
+                    pass  # Continua comunque
+            
+            print("  Scroll aggressivo...")
+            for i in range(10):
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                time.sleep(1.2)
+            
+            page.evaluate("window.scrollTo(0, 0)")
+            time.sleep(1)
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            time.sleep(3)
+            
+            # Attesa finale rete stabile
             try:
-                page.wait_for_selector('div[class*="Box"]', timeout=45000)
-                print("  ✅ Elementi trovati")
-                
-                print("  📜 Scroll pagina per caricare elementi...")
-                
-                for i in range(5):
-                    page.evaluate(f"window.scrollTo(0, {(i + 1) * 500})")
-                    time.sleep(0.5)
-                
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(2)
-                
-                page.evaluate("window.scrollTo(0, 0)")
-                time.sleep(1)
-                
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(2)
-                
-                time.sleep(5)
-                
-                page.wait_for_load_state('networkidle', timeout=30000)
-                print("  ✅ Rete stabile")
-                
-            except Exception as e:
-                print(f"  ⚠️ Timeout attesa elementi")
-                time.sleep(5)
+                page.wait_for_load_state('networkidle', timeout=45000)
+            except:
+                print("  Warning: networkidle non raggiunto, forzatura attesa...")
+                time.sleep(12)
             
             html_content = page.content()
-            
-            print(f"  ✅ HTML scaricato ({len(html_content)} bytes)")
+            size_kb = len(html_content) / 1024
+            print(f"  HTML scaricato: {size_kb:.1f} KB")
             
             page.close()
             context.close()
             browser.close()
             
+            if size_kb < 500:
+                print(f"  Warning: HTML troppo piccolo ({size_kb:.1f} KB), possibile caricamento parziale")
+            
             return html_content
             
     except Exception as e:
-        print(f"❌ Errore recupero pagina: {e}")
+        print(f"Error: Errore recupero pagina: {e}")
         traceback.print_exc()
         return None
 
@@ -499,4 +511,5 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
