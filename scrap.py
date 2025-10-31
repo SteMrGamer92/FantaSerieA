@@ -469,7 +469,7 @@ def main():
         print(f"  🆔 ID Partita: {match_id}")
         
         # === CARICA PAGINA PARTITA ===
-        odds_url = f"{href},tab:additional_odds"
+        odds_url = href
         odds_html = fetch_match_page(odds_url)
         
         if not odds_html:
