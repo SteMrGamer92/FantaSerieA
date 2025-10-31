@@ -107,8 +107,8 @@ def fetch_tournament_page(url, target_giornata=10):
 
             # === ATTESA PARTITE ===
             print("  Attesa partite...")
-            page.wait_for_selector('a[href*="/match/"]', timeout=40000)
-            page.wait_for_load_state('networkidle', timeout=30000)
+            page.wait_for_selector('a[href*="/match/"]', timeout=60000)  # ← 60s invece di 40s
+            time.sleep(5)  # ← Attesa fissa invece di networkidle
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             time.sleep(3)
 
@@ -543,3 +543,4 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
