@@ -36,6 +36,15 @@ on:
     # Partita 20:45 IT
     - cron: '30 18 * * 0'   # 20:30 IT (15 min prima)
     - cron: '45 20 * * 0'   # 22:45 IT (2h dopo inizio)
+
+    # ========== LUNEDI ==========
+    # Partita 18:00 IT
+    - cron: '15 10 * * 1'   # 12:15 IT (15 min prima)
+    - cron: '30 12 * * 1'   # 14:30 IT (2h dopo inizio)
+
+    # Partita 20:45 IT
+    - cron: '15 10 * * 1'   # 12:15 IT (15 min prima)
+    - cron: '30 12 * * 1'   # 14:30 IT (2h dopo inizio)
   
   workflow_dispatch:  # Esecuzione manuale
 
