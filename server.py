@@ -400,59 +400,6 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     return jsonify({'success': False, 'error': 'Errore server'}), 500
-
-@app.route('/api/admin/update-matches', methods=['POST'])
-@require_api_key
-def update_matches():
-    """
-    Avvia lo scraper in background (completamente staccato)
-    """
-    try:
-        import subprocess
-        import os
-
-        logger.info("Avvio scraper in BACKGROUND (detached)...")
-
-        # Comando: nohup python scrap.py > /tmp/scraper.log 2>&1 &
-        subprocess.Popen(
-            [sys.executable, 'scrap.py'],
-            stdout=open('/tmp/scraper.log', 'w'),
-            stderr=subprocess.STDOUT,
-            start_new_session=True,  # 🔥 Stacca completamente dal parent
-            cwd=os.getcwd()
-        )
-
-        return jsonify({
-            'success': True,
-            'message': 'Scraper avviato in background. Controlla i log tra qualche minuto.',
-            'log_hint': 'I log appariranno in /tmp/scraper.log tra 10-20 secondi'
-        }), 202
-
-    except Exception as e:
-        logger.error(f"Errore avvio scraper: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/admin/scraper-log', methods=['GET'])
-@require_api_key
-def get_scraper_log():
-    """Legge gli ultimi 100 righe del log dello scraper"""
-    try:
-        log_path = '/tmp/scraper.log'
-        if not os.path.exists(log_path):
-            return jsonify({'success': False, 'error': 'Log non ancora creato'})
-        
-        with open(log_path, 'r') as f:
-            lines = f.readlines()
-        
-        return jsonify({
-            'success': True,
-            'log': lines[-100:],  # Ultime 100 righe
-            'full_path': log_path
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
         
 @app.route('/api/schedine/<int:user_id>/<int:match_id>', methods=['DELETE'])
 @require_api_key
@@ -485,6 +432,7 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
 
 
 
