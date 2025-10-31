@@ -3,101 +3,79 @@ name: Scraper Serie A
 on:
   schedule:
     # ========== VENERDÌ ==========
-    # Partita 20:45 IT
     - cron: '30 18 * * 5'   # 20:30 IT (15 min prima)
     - cron: '45 20 * * 5'   # 22:45 IT (2h dopo inizio)
     
     # ========== SABATO ==========
-    # Partita 15:00 IT
-    - cron: '45 12 * * 6'   # 14:45 IT (15 min prima)
-    - cron: '0 15 * * 6'    # 17:00 IT (2h dopo inizio)
-    
-    # Partita 18:00 IT
-    - cron: '45 15 * * 6'   # 17:45 IT (15 min prima)
-    - cron: '0 18 * * 6'    # 20:00 IT (2h dopo inizio)
-    
-    # Partita 20:45 IT
-    - cron: '30 18 * * 6'   # 20:30 IT (15 min prima)
-    - cron: '45 20 * * 6'   # 22:45 IT (2h dopo inizio)
+    - cron: '45 12 * * 6'   # 14:45 IT
+    - cron: '0 15 * * 6'    # 17:00 IT
+    - cron: '45 15 * * 6'   # 17:45 IT
+    - cron: '0 18 * * 6'    # 20:00 IT
+    - cron: '30 18 * * 6'   # 20:30 IT
+    - cron: '45 20 * * 6'   # 22:45 IT
     
     # ========== DOMENICA ==========
-    # Partita 12:30 IT
-    - cron: '15 10 * * 0'   # 12:15 IT (15 min prima)
-    - cron: '30 12 * * 0'   # 14:30 IT (2h dopo inizio)
-    
-    # Partita 15:00 IT
-    - cron: '45 12 * * 0'   # 14:45 IT (15 min prima)
-    - cron: '0 15 * * 0'    # 17:00 IT (2h dopo inizio)
-    
-    # Partita 18:00 IT
-    - cron: '45 15 * * 0'   # 17:45 IT (15 min prima)
-    - cron: '0 18 * * 0'    # 20:00 IT (2h dopo inizio)
-    
-    # Partita 20:45 IT
-    - cron: '30 18 * * 0'   # 20:30 IT (15 min prima)
-    - cron: '45 20 * * 0'   # 22:45 IT (2h dopo inizio)
-
-    # ========== LUNEDI ==========
-    # Partita 18:00 IT
-    - cron: '45 15 * * 1'   # 17:45 IT (15 min prima)
-    - cron: '0 18 * * 1'    # 20:00 IT (2h dopo inizio)
-    
-    # Partita 20:45 IT
-    - cron: '30 18 * * 1'   # 20:30 IT (15 min prima)
-    - cron: '45 20 * * 1'   # 22:45 IT (2h dopo inizio)
+    - cron: '15 10 * * 0'   # 12:15 IT
+    - cron: '30 12 * * 0'   # 14:30 IT
+    - cron: '45 12 * * 0'   # 14:45 IT
+    - cron: '0 15 * * 0'    # 17:00 IT
+    - cron: '45 15 * * 0'   # 17:45 IT
+    - cron: '0 18 * * 0'    # 20:00 IT
+    - cron: '30 18 * * 0'   # 20:30 IT
+    - cron: '45 20 * * 0'   # 22:45 IT
   
   workflow_dispatch:
-  
-  jobs:
-    scrape:
-      runs-on: ubuntu-latest
-      timeout-minutes: 30
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4  # ✅ Aggiornato anche questo
       
-      steps:
-        - name: 📥 Checkout repository
-          uses: actions/checkout@v4  # ✅ Aggiornato anche questo
-        
-        - name: 🐍 Setup Python 3.12
-          uses: actions/setup-python@v5  # ✅ Aggiornato
-          with:
-            python-version: '3.12'
-        
-        - name: 📦 Install dependencies
-          run: |
-            pip install playwright lxml pytz supabase
-            playwright install chromium --with-deps
-        
-        - name: 🚀 Run scraper
-          run: python scrap.py
-          env:
-            SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-            SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          continue-on-error: true
-        
-        # ✅ UPLOAD ARTIFACT V4
-        - name: 📤 Upload HTML debug files
-          if: always()
-          uses: actions/upload-artifact@v4  # ✅ Versione aggiornata
-          with:
-            name: html-debug-files
-            path: /tmp/match_*.html
-            retention-days: 7
-            if-no-files-found: warn  # ✅ Non fallire se non ci sono file
-        
-        # ✅ UPLOAD SCREENSHOT V4
-        - name: 📸 Upload screenshots
-          if: always()
-          uses: actions/upload-artifact@v4  # ✅ Versione aggiornata
-          with:
-            name: screenshots
-            path: /tmp/screenshot_*.png
-            retention-days: 7
-            if-no-files-found: warn
-        
-        - name: 📊 Log risultato
-          if: always()
-          run: |
-            echo "✅ Scraping completato alle $(date)"
-            echo "📁 File generati:"
-            ls -lh /tmp/match_*.html 2>/dev/null || echo "  Nessun HTML"
-            ls -lh /tmp/screenshot_*.png 2>/dev/null || echo "  Nessuno screenshot"
+      - name: 🐍 Setup Python 3.12
+        uses: actions/setup-python@v5  # ✅ Aggiornato
+        with:
+          python-version: '3.12'
+      
+      - name: 📦 Install dependencies
+        run: |
+          pip install playwright lxml pytz supabase
+          playwright install chromium --with-deps
+      
+      - name: 🚀 Run scraper
+        run: python scrap.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        continue-on-error: true
+      
+      # ✅ UPLOAD ARTIFACT V4
+      - name: 📤 Upload HTML debug files
+        if: always()
+        uses: actions/upload-artifact@v4  # ✅ Versione aggiornata
+        with:
+          name: html-debug-files
+          path: /tmp/match_*.html
+          retention-days: 7
+          if-no-files-found: warn  # ✅ Non fallire se non ci sono file
+      
+      # ✅ UPLOAD SCREENSHOT V4
+      - name: 📸 Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4  # ✅ Versione aggiornata
+        with:
+          name: screenshots
+          path: /tmp/screenshot_*.png
+          retention-days: 7
+          if-no-files-found: warn
+      
+      - name: 📊 Log risultato
+        if: always()
+        run: |
+          echo "✅ Scraping completato alle $(date)"
+          echo "📁 File generati:"
+          ls -lh /tmp/match_*.html 2>/dev/null || echo "  Nessun HTML"
+          ls -lh /tmp/screenshot_*.png 2>/dev/null || echo "  Nessuno screenshot"
