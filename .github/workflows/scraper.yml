@@ -2,15 +2,47 @@ name: Scraper Serie A
 
 on:
   schedule:
-    # Esegui ogni 6 ore: 00:00, 06:00, 12:00, 18:00 UTC
-    - cron: '0 */6 * * *'
+    # ========== VENERDÌ ==========
+    # Partita 20:45 IT
+    - cron: '30 18 * * 5'   # 20:30 IT (15 min prima)
+    - cron: '45 20 * * 5'   # 22:45 IT (2h dopo inizio)
+    
+    # ========== SABATO ==========
+    # Partita 15:00 IT
+    - cron: '45 12 * * 6'   # 14:45 IT (15 min prima)
+    - cron: '0 15 * * 6'    # 17:00 IT (2h dopo inizio)
+    
+    # Partita 18:00 IT
+    - cron: '45 15 * * 6'   # 17:45 IT (15 min prima)
+    - cron: '0 18 * * 6'    # 20:00 IT (2h dopo inizio)
+    
+    # Partita 20:45 IT
+    - cron: '30 18 * * 6'   # 20:30 IT (15 min prima)
+    - cron: '45 20 * * 6'   # 22:45 IT (2h dopo inizio)
+    
+    # ========== DOMENICA ==========
+    # Partita 12:30 IT
+    - cron: '15 10 * * 0'   # 12:15 IT (15 min prima)
+    - cron: '30 12 * * 0'   # 14:30 IT (2h dopo inizio)
+    
+    # Partita 15:00 IT
+    - cron: '45 12 * * 0'   # 14:45 IT (15 min prima)
+    - cron: '0 15 * * 0'    # 17:00 IT (2h dopo inizio)
+    
+    # Partita 18:00 IT
+    - cron: '45 15 * * 0'   # 17:45 IT (15 min prima)
+    - cron: '0 18 * * 0'    # 20:00 IT (2h dopo inizio)
+    
+    # Partita 20:45 IT
+    - cron: '30 18 * * 0'   # 20:30 IT (15 min prima)
+    - cron: '45 20 * * 0'   # 22:45 IT (2h dopo inizio)
   
-  workflow_dispatch:  # Permette esecuzione manuale
+  workflow_dispatch:  # Esecuzione manuale
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # ✅ Aumentato timeout job
+    timeout-minutes: 30
     
     steps:
       - name: 📥 Checkout repository
@@ -31,3 +63,9 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      
+      - name: 📊 Log risultato
+        if: always()
+        run: |
+          echo "✅ Scraping completato alle $(date)"
+          echo "🕐 Prossima esecuzione: vedi schedule cron"
