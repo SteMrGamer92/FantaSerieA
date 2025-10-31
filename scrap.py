@@ -326,8 +326,34 @@ def extract_goals(tree, stato):
     goalcasa = None
     goaltrasferta = None
     
-    try:
-        score_xpath = "//div[contains(@class, 'score')]//span[string-length(text()) <= 2 and string-length(text()) >= 1]"
+    try:        
+        # XPath assoluti esatti forniti
+        xpath_goalcasa = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[1]"
+        xpath_goaltrasferta = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[3]"
+
+        # Estrazione diretta degli elementi
+        element_casa = tree.xpath(xpath_goalcasa)
+        element_trasferta = tree.xpath(xpath_goaltrasferta)
+
+        # Verifica che entrambi gli elementi esistano
+        if element_casa and element_trasferta:
+            goalcasa_text = element_casa[0].text_content().strip()
+            goaltrasferta_text = element_trasferta[0].text_content().strip()
+            
+            # Conversione in interi (con gestione errori opzionale)
+            try:
+                goalcasa = int(goalcasa_text)
+                goaltrasferta = int(goaltrasferta_text)
+                print(f"    ⚽ Goal (metodo 1): {goalcasa}-{goaltrasferta}")
+                return goalcasa, goaltrasferta
+            except ValueError:
+                print("    Errore: uno dei valori non è un numero valido.")
+                return None, None
+        else:
+            print("    Elementi non trovati con gli XPath specificati.")
+            return None, None
+
+         score_xpath = "//div[contains(@class, 'score')]//span[string-length(text()) <= 2 and string-length(text()) >= 1]"
         score_elements = tree.xpath(score_xpath)
         
         scores = []
@@ -339,21 +365,9 @@ def extract_goals(tree, stato):
         if len(scores) >= 2:
             goalcasa = scores[0]
             goaltrasferta = scores[1]
-            print(f"    ⚽ Goal (metodo 1): {goalcasa}-{goaltrasferta}")
+            print(f"    ⚽ Goal (metodo 2): {goalcasa}-{goaltrasferta}")
             return goalcasa, goaltrasferta
-        
-        score_full_xpath = "//span[contains(text(), '-') and string-length(text()) <= 7]"
-        elements = tree.xpath(score_full_xpath)
-        
-        for element in elements:
-            text = element.text_content().strip()
-            if re.match(r'^\d+\s*-\s*\d+$', text):
-                parts = text.split('-')
-                goalcasa = int(parts[0].strip())
-                goaltrasferta = int(parts[1].strip())
-                print(f"    ⚽ Goal (metodo 2): {goalcasa}-{goaltrasferta}")
-                return goalcasa, goaltrasferta
-        
+            
         full_text = tree.text_content()
         score_match = re.search(r'\b(\d{1,2})\s*-\s*(\d{1,2})\b', full_text)
         if score_match:
@@ -485,3 +499,4 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
