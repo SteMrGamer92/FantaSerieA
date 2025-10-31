@@ -147,13 +147,54 @@ def fetch_tournament_page(url, target_giornata=10):
         return None
 
 def fetch_match_page(url):
-    """Recupera HTML partita con attesa delle quote"""
+    """Recupera HTML partita con viewport ridotto per testare layout mobile"""
     try:
         with sync_playwright() as p:
             print(f"  Avvio browser per partita: {url}")
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
-            page = browser.new_page()
+            
+            # ✅ VIEWPORT RIDOTTO (simula tablet)
+            context = browser.new_context(
+                viewport={'width': 768, 'height': 1024},  # iPad portrait
+                user_agent='Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
+            )
+            page = context.new_page()
+            
             page.goto(url, wait_until='domcontentloaded', timeout=60000)
+            
+            # ✅ ATTENDI E CLICCA TAB "QUOTE" SE PRESENTE
+            print("  Ricerca tab Quote/Odds...")
+            try:
+                # Prova a cliccare tab "Quote" o "Odds"
+                tab_selectors = [
+                    "button:has-text('Quote')",
+                    "button:has-text('Odds')",
+                    "a:has-text('Quote')",
+                    "div[role='tab']:has-text('Quote')",
+                    "//button[contains(text(), 'Quote') or contains(text(), 'Odds')]"
+                ]
+                
+                for selector in tab_selectors:
+                    try:
+                        if selector.startswith('//'):
+                            # XPath
+                            page.wait_for_selector(f'xpath={selector}', timeout=5000)
+                            page.click(f'xpath={selector}')
+                        else:
+                            # CSS Selector
+                            page.wait_for_selector(selector, timeout=5000)
+                            page.click(selector)
+                        
+                        print(f"  ✅ Cliccato su tab Quote: {selector}")
+                        time.sleep(2)  # Attendi caricamento contenuto
+                        break
+                    except:
+                        continue
+                else:
+                    print("  ℹ️  Nessuna tab Quote trovata (probabilmente già visibile)")
+            
+            except Exception as e:
+                print(f"  ⚠️  Errore ricerca tab: {e}")
             
             # Attendi quote
             print("  Attesa caricamento quote...")
@@ -170,14 +211,19 @@ def fetch_match_page(url):
             html_content = page.content()
             print(f"  HTML partita: {len(html_content):,} byte")
             
-            # ✅ SALVA HTML (prima partita solo per debug)
+            # Salva HTML e screenshot
             match_id = url.split('#id:')[1] if '#id:' in url else 'unknown'
             save_html_debug(html_content, f"match_{match_id}.html")
+            
+            # ✅ SCREENSHOT CON VIEWPORT RIDOTTO
+            page.screenshot(path=f'/tmp/screenshot_{match_id}.png', full_page=True)
+            print(f"  📸 Screenshot salvato (768x1024)")
             
             browser.close()
             return html_content
     except Exception as e:
         print(f"ERRORE PARTITA: {e}")
+        traceback.print_exc()
         return None
 
 def extract_match_id_from_url(href):
@@ -534,6 +580,7 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
 
 
