@@ -53,62 +53,74 @@ def insert_or_update_match(supabase, match_data):
         return False
 
 def fetch_page(url):
+    """Recupera il contenuto HTML usando Playwright con scroll multipli"""
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True, args=[
-                '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu',
-                '--window-size=1400,900'
-            ])
-            context = browser.new_context(
-                viewport={'width': 1400, 'height': 900},  # Largo ma realistico
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                device_scale_factor=1,
-                has_touch=False,
-                is_mobile=False,
-                locale='it-IT'
+            print(f"  🌐 Avvio browser...")
+            
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--disable-gpu',
+                    '--disable-dev-shm-usage',
+                    '--disable-setuid-sandbox',
+                    '--no-sandbox',
+                    '--disable-web-security'
+                ]
             )
+            
+            context = browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            )
+            
             page = context.new_page()
-
-            # Blocca risorse pesanti
-            page.route("**/*.{png,jpg,css,woff,svg,gif}", lambda route: route.abort())
-
-            print(f"  📡 Caricamento: {url}")
-            page.goto(url, wait_until='domcontentloaded', timeout=90000)
-
-            # === SOLO PER PAGINE PARTITA CON #tab:additional_odds ===
-            if "match" in url and "additional_odds" in url:
-                # 1. Prova sidebar (desktop)
-                if not wait_for_sidebar_odds(page):
-                    # 2. Fallback: clicca tab
-                    if not click_odds_tab(page):
-                        print("  ❌ Quote non caricabili")
-                        return None
-
-                # Scroll leggero per triggerare lazy load
-                page.evaluate("window.scrollBy(0, 400)")
+            
+            print(f"  📡 Caricamento pagina...")
+            page.goto(url, wait_until='domcontentloaded', timeout=60000)
+            
+            print("  ⏳ Attesa elementi...")
+            
+            try:
+                page.wait_for_selector('div[class*="Box"]', timeout=45000)
+                print("  ✅ Elementi trovati")
+                
+                print("  📜 Scroll pagina per caricare elementi...")
+                
+                for i in range(5):
+                    page.evaluate(f"window.scrollTo(0, {(i + 1) * 500})")
+                    time.sleep(0.5)
+                
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 time.sleep(2)
-
-                # Attesa rete
-                try:
-                    page.wait_for_load_state('networkidle', timeout=30000)
-                except:
-                    time.sleep(6)
-
-            else:
-                # Torneo: scroll classico
-                for _ in range(5):
-                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                    time.sleep(1)
-
-            html = page.content()
-            size = len(html) / 1024
-            print(f"  ✅ HTML: {size:.1f} KB")
-            if "additional_odds" in url and size < 1000:
-                print(f"  ⚠️ HTML piccolo per pagina quote: {size:.1f} KB")
-            return html
-
+                
+                page.evaluate("window.scrollTo(0, 0)")
+                time.sleep(1)
+                
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                time.sleep(2)
+                
+                time.sleep(5)
+                
+                page.wait_for_load_state('networkidle', timeout=30000)
+                print("  ✅ Rete stabile")
+                
+            except Exception as e:
+                print(f"  ⚠️ Timeout attesa elementi")
+                time.sleep(5)
+            
+            html_content = page.content()
+            
+            print(f"  ✅ HTML scaricato ({len(html_content)} bytes)")
+            
+            page.close()
+            context.close()
+            browser.close()
+            
+            return html_content
+            
     except Exception as e:
-        print(f"❌ Errore: {e}")
+        print(f"❌ Errore recupero pagina: {e}")
         traceback.print_exc()
         return None
 
@@ -307,7 +319,7 @@ def extract_match_info(tree):
     return data, ora, stato
 
 def extract_goals(tree, stato):
-    """Estrae i goal solo se la partita è finita"""
+    """Estrae i goal solo se la partita è finita - 4 metodi"""
     if stato != 'F':
         return None, None
     
@@ -315,85 +327,71 @@ def extract_goals(tree, stato):
     goaltrasferta = None
     
     try:
-        # XPath assoluti esatti forniti
-        xpath_goalcasa = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[1]"
-        xpath_goaltrasferta = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[3]"
-
-        # Estrazione diretta degli elementi
-        element_casa = tree.xpath(xpath_goalcasa)
-        element_trasferta = tree.xpath(xpath_goaltrasferta)
-
-        # Verifica che entrambi gli elementi esistano
-        if element_casa and element_trasferta:
-            goalcasa_text = element_casa[0].text_content().strip()
-            goaltrasferta_text = element_trasferta[0].text_content().strip()
-            
-            # Conversione in interi (con gestione errori opzionale)
-            try:
-                goalcasa = int(goalcasa_text)
-                goaltrasferta = int(goaltrasferta_text)
-                print(f"    ⚽ Goal (XPath esatti): {goalcasa}-{goaltrasferta}")
+        # METODO 1: XPath assoluto per il punteggio principale
+        score_xpath_abs = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div/div[2]/div/span"
+        score_elements = tree.xpath(score_xpath_abs)
+        
+        if score_elements:
+            text = score_elements[0].text_content().strip()
+            if re.match(r'^\d+\s*-\s*\d+$', text):
+                parts = text.split('-')
+                goalcasa = int(parts[0].strip())
+                goaltrasferta = int(parts[1].strip())
+                print(f"    ⚽ Goal (XPath assoluto): {goalcasa}-{goaltrasferta}")
                 return goalcasa, goaltrasferta
-            except ValueError:
-                print("    Errore: uno dei valori non è un numero valido.")
-                return None, None
-        else:
-            print("    Elementi non trovati con gli XPath specificati.")
-            return None, None
-
-        score_xpath = "//div[contains(@class, 'score')]//span[string-length(text()) <= 2 and string-length(text()) >= 1]"
-        score_elements = tree.xpath(score_xpath)
+        
+        # METODO 2: Cerca elementi che contengono solo numeri singoli
+        single_numbers_xpath = "//span[string-length(text()) <= 2 and string-length(text()) >= 1 and not(contains(text(), '-'))]"
+        number_elements = tree.xpath(single_numbers_xpath)
         
         scores = []
-        for element in score_elements:
+        for element in number_elements:
             text = element.text_content().strip()
-            if re.match(r'^\d+$', text):
-                scores.append(int(text))
+            try:
+                score = int(text)
+                if 0 <= score <= 99:  # Solo numeri ragionevoli per un punteggio
+                    scores.append(score)
+            except ValueError:
+                continue
         
+        # Prendi i primi 2 numeri trovati
         if len(scores) >= 2:
             goalcasa = scores[0]
             goaltrasferta = scores[1]
-            print(f"    ⚽ Goal (metodo 1): {goalcasa}-{goaltrasferta}")
+            print(f"    ⚽ Goal (numeri singoli): {goalcasa}-{goaltrasferta}")
             return goalcasa, goaltrasferta
         
+        # METODO 3: Cerca span con pattern X-Y
+        score_full_xpath = "//span[contains(text(), '-')]"
+        elements = tree.xpath(score_full_xpath)
         
+        for element in elements:
+            text = element.text_content().strip()
+            # Match pattern tipo "3 - 1" o "3-1"
+            if re.match(r'^\d{1,2}\s*-\s*\d{1,2}$', text):
+                parts = text.split('-')
+                goalcasa = int(parts[0].strip())
+                goaltrasferta = int(parts[1].strip())
+                print(f"    ⚽ Goal (pattern X-Y): {goalcasa}-{goaltrasferta}")
+                return goalcasa, goaltrasferta
+        
+        # METODO 4: Regex su tutto il testo (ultimo tentativo)
         full_text = tree.text_content()
-        score_match = re.search(r'\b(\d{1,2})\s*-\s*(\d{1,2})\b', full_text)
+        # Cerca pattern X-Y circondato da spazi o inizio/fine stringa
+        score_match = re.search(r'(?:^|\s)(\d{1,2})\s*-\s*(\d{1,2})(?:\s|$)', full_text)
         if score_match:
             goalcasa = int(score_match.group(1))
             goaltrasferta = int(score_match.group(2))
-            print(f"    ⚽ Goal (metodo 3): {goalcasa}-{goaltrasferta}")
+            print(f"    ⚽ Goal (regex globale): {goalcasa}-{goaltrasferta}")
             return goalcasa, goaltrasferta
         
-        print(f"    ⚠️ Goal non trovati")
+        print(f"    ⚠️ Goal non trovati (partita finita ma punteggio non visibile)")
     
     except Exception as e:
         print(f"    ❌ Errore extract_goals: {e}")
         traceback.print_exc()
     
     return goalcasa, goaltrasferta
-
-def wait_for_sidebar_odds(page):
-    try:
-        print("  🔍 Attesa quote in sidebar...")
-        page.wait_for_selector(
-            "div:has-text('1X2') ~ div span:text-matches('[0-9]+\\.[0-9]+')",
-            timeout=25000
-        )
-        print("  ✅ Quote in sidebar!")
-        return True
-    except:
-        return False
-
-def click_odds_tab(page):
-    try:
-        print("  🔄 Click tab 'Quote'...")
-        page.click("a:has-text('Quote')", timeout=15000)
-        page.wait_for_selector("span:text-matches('[0-9]+\\.[0-9]+')", timeout=25000)
-        print("  ✅ Tab caricata")
-        return True
-    except:
-        return False
 
 def main():
     print("=" * 60)
