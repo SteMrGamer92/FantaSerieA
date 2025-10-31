@@ -24,6 +24,28 @@ def init_supabase():
         traceback.print_exc()
         return None
 
+def save_html_debug(html_content, filename="debug_match.html"):
+    """Salva HTML per debug (funziona su GitHub Actions e locale)"""
+    try:
+        import os
+        
+        # Su GitHub Actions usa /tmp, localmente Desktop
+        if os.path.exists('/tmp'):
+            save_dir = '/tmp'
+        else:
+            save_dir = os.path.join(os.path.expanduser("~"), "Desktop")
+        
+        filepath = os.path.join(save_dir, filename)
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+        
+        print(f"💾 HTML salvato: {filepath} ({len(html_content):,} byte)")
+        return filepath
+    except Exception as e:
+        print(f"❌ Errore salvataggio HTML: {e}")
+        return None
+        
 def check_match_exists(supabase, match_id):
     """Verifica se una partita esiste già nel database"""
     try:
@@ -133,10 +155,10 @@ def fetch_match_page(url):
             page = browser.new_page()
             page.goto(url, wait_until='domcontentloaded', timeout=60000)
             
-            # ✅ ATTENDI GLI SPAN CON LE QUOTE
+            # Attendi quote
             print("  Attesa caricamento quote...")
             page.wait_for_selector('span[class*="textStyle_display"]', timeout=45000)
-            time.sleep(3)  # Attesa extra per sicurezza
+            time.sleep(3)
             
             # Scroll
             for i in range(5):
@@ -147,6 +169,11 @@ def fetch_match_page(url):
 
             html_content = page.content()
             print(f"  HTML partita: {len(html_content):,} byte")
+            
+            # ✅ SALVA HTML (prima partita solo per debug)
+            match_id = url.split('#id:')[1] if '#id:' in url else 'unknown'
+            save_html_debug(html_content, f"match_{match_id}.html")
+            
             browser.close()
             return html_content
     except Exception as e:
@@ -507,6 +534,7 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
 
 
