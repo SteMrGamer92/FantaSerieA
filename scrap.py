@@ -305,6 +305,7 @@ def extract_odds(tree):
             if re.match(r'^\d+\.\d+$', text):
                 try:
                     quota = float(text)
+                    print(f"{quota}")
                     # ✅ FILTRO: solo quote realistiche
                     if 1.0 <= quota <= 50.0:
                         quotes.append(quota)
@@ -581,6 +582,7 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
 
 
