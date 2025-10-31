@@ -52,76 +52,101 @@ def insert_or_update_match(supabase, match_data):
         traceback.print_exc()
         return False
 
-def fetch_page(url):
-    """Recupera il contenuto HTML usando Playwright con scroll multipli"""
+def fetch_tournament_page(url, target_giornata=10):
     try:
         with sync_playwright() as p:
-            print(f"  🌐 Avvio browser...")
-            
+            print(f"  Avvio browser...")
             browser = p.chromium.launch(
                 headless=True,
                 args=[
-                    '--disable-gpu',
-                    '--disable-dev-shm-usage',
-                    '--disable-setuid-sandbox',
                     '--no-sandbox',
-                    '--disable-web-security'
+                    '--disable-setuid-sandbox',
+                    '--disable-web-security',
+                    '--disable-blink-features=AutomationControlled'
                 ]
             )
-            
             context = browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             )
-            
             page = context.new_page()
-            
-            print(f"  📡 Caricamento pagina...")
+
+            print(f"  Caricamento: {url}")
             page.goto(url, wait_until='domcontentloaded', timeout=60000)
-            
-            print("  ⏳ Attesa elementi...")
-            
+
+            # === BOTTONE TENDINA ===
+            button_xpath = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[2]/div[2]/div[2]/div/div/div[1]/div/div/button"
+            print("  Apertura tendina...")
             try:
-                page.wait_for_selector('div[class*="Box"]', timeout=45000)
-                print("  ✅ Elementi trovati")
-                
-                print("  📜 Scroll pagina per caricare elementi...")
-                
-                for i in range(5):
-                    page.evaluate(f"window.scrollTo(0, {(i + 1) * 500})")
-                    time.sleep(0.5)
-                
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(2)
-                
-                page.evaluate("window.scrollTo(0, 0)")
-                time.sleep(1)
-                
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                time.sleep(2)
-                
-                time.sleep(5)
-                
-                page.wait_for_load_state('networkidle', timeout=30000)
-                print("  ✅ Rete stabile")
-                
+                page.wait_for_selector(f'xpath={button_xpath}', state='visible', timeout=30000)
+                page.eval_on_selector(f'xpath={button_xpath}', "el => el.click()")
+                print("  Tendina aperta")
             except Exception as e:
-                print(f"  ⚠️ Timeout attesa elementi")
-                time.sleep(5)
-            
+                print(f"  BOTTONE NON TROVATO: {e}")
+                page.screenshot(path="/tmp/debug_button.png", full_page=True)
+                browser.close()
+                return None
+
+            # === ATTESA PORTAL (2 secondi) ===
+            print("  Attesa portal menu (2s)...")
+            time.sleep(2)
+
+            # === GIORNATA 10 ===
+            giornata_selector = f'ul.dropdown__list li:has-text("Round {target_giornata}")'
+            print(f"  Selezione Round {target_giornata}...")
+            try:
+                locator = page.locator(giornata_selector)
+                locator.wait_for(state='visible', timeout=20000)
+                locator.click(force=True)
+                print(f"  Cliccato Round {target_giornata}")
+            except Exception as e:
+                print(f"  GIORNATA NON TROVATA: {e}")
+                page.screenshot(path="/tmp/debug_giornata_fail.png", full_page=True)
+                browser.close()
+                return None
+
+            # === ATTESA PARTITE ===
+            print("  Attesa partite...")
+            page.wait_for_selector('a[href*="/match/"]', timeout=40000)
+            page.wait_for_load_state('networkidle', timeout=30000)
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            time.sleep(3)
+
             html_content = page.content()
-            
-            print(f"  ✅ HTML scaricato ({len(html_content)} bytes)")
-            
-            page.close()
-            context.close()
+            print(f"  HTML scaricato: {len(html_content):,} byte")
+            page.screenshot(path="/tmp/debug_final.png", full_page=True)
+
             browser.close()
-            
             return html_content
-            
+
     except Exception as e:
-        print(f"❌ Errore recupero pagina: {e}")
+        print(f"ERRORE: {e}")
         traceback.print_exc()
+        return None
+
+def fetch_match_page(url):
+    """Recupera HTML partita (senza tendina)"""
+    try:
+        with sync_playwright() as p:
+            print(f"  Avvio browser per partita: {url}")
+            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
+            page = browser.new_page()
+            page.goto(url, wait_until='domcontentloaded', timeout=60000)
+            page.wait_for_selector('div[class*="Box"]', timeout=45000)
+            page.wait_for_load_state('networkidle', timeout=30000)
+
+            for i in range(5):
+                page.evaluate(f"window.scrollTo(0, {(i + 1) * 600})")
+                time.sleep(0.5)
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            time.sleep(2)
+
+            html_content = page.content()
+            print(f"  HTML partita: {len(html_content):,} byte")
+            browser.close()
+            return html_content
+    except Exception as e:
+        print(f"ERRORE PARTITA: {e}")
         return None
 
 def extract_match_id_from_url(href):
@@ -133,45 +158,44 @@ def extract_match_id_from_url(href):
         print(f"⚠️ Errore estrazione ID: {e}")
         return None
 
-def extract_match_hrefs(html_content):
-    """Estrae gli href delle partite dalla pagina del torneo"""
+def extract_match_hrefs(html_content, target_giornata=None):
     if not html_content:
-        print("❌ Nessun contenuto HTML ricevuto")
         return []
     
     try:
         tree = html.fromstring(html_content)
         results = []
-        
+
+        # Verifica giornata corrente
         giornata_xpath = "//div[contains(@class, 'Box')]//button/span[contains(text(), 'Round')]"
         giornata_elements = tree.xpath(giornata_xpath)
-        giornata_number = None
+        current_giornata = None
         
         if giornata_elements:
             match = re.search(r'\d+', giornata_elements[0].text_content().strip())
-            giornata_number = int(match.group()) if match else None
+            current_giornata = int(match.group()) if match else None
         
-        if not giornata_number:
-            print("⚠️ Giornata non trovata")
+        print(f"Giornata visualizzata: {current_giornata}")
+        
+        if target_giornata and current_giornata != target_giornata:
+            print(f"ATTENZIONE: Aspettato {target_giornata}, ma è {current_giornata}")
             return []
-        
-        print(f"📅 Giornata estratta: {giornata_number}")
-        
+
         xpath = "//div[contains(@class, 'Box')]//a[contains(@href, '/it/football/match/')]"
         elements = tree.xpath(xpath)
-        print(f"🔍 Trovate {len(elements)} partite")
-        
+        print(f"Trovate {len(elements)} partite")
+
         for element in elements:
             href = element.get('href', '')
             if href and not href.startswith('https://'):
                 href = f"https://www.sofascore.com{href}"
             if href:
-                results.append((giornata_number, href))
+                results.append((current_giornata, href))
         
         return results
         
     except Exception as e:
-        print(f"❌ Errore extract_match_hrefs: {e}")
+        print(f"Errore extract_match_hrefs: {e}")
         traceback.print_exc()
         return []
 
@@ -414,31 +438,28 @@ def main():
     
     supabase = init_supabase()
     if not supabase:
-        print("❌ Impossibile connettersi a Supabase")
+        print("Impossibile connettersi a Supabase")
         sys.exit(1)
     
+    # SCEGLI TU LA GIORNATA
+    TARGET_GIORNATA = 10
     tournament_url = 'https://www.sofascore.com/it/torneo/calcio/italy/serie-a/23#id:76457#tab:matches'
-    
-    print("\n📡 Recupero pagina torneo...")
-    html_content = fetch_page(tournament_url)
+
+    html_content = fetch_tournament_page(tournament_url, target_giornata=TARGET_GIORNATA)
     if not html_content:
-        print("❌ Impossibile recuperare contenuto pagina")
         sys.exit(1)
-    
-    data = extract_match_hrefs(html_content)
-    
+
+    data = extract_match_hrefs(html_content, target_giornata=TARGET_GIORNATA)
     if not data:
-        print("❌ Nessuna partita trovata")
         sys.exit(1)
-    
-    print(f"\n🔄 Elaborazione {len(data)} partite...\n")
-    
+
     success_count = 0
     error_count = 0
-    
+
     for idx, (giornata, href) in enumerate(data, 1):
         print(f"[{idx}/{len(data)}] " + "=" * 50)
         
+        # === ESTRAI ID PARTITA ===
         match_id = extract_match_id_from_url(href)
         if not match_id:
             print(f"  ⚠️  SKIP: ID non valido")
@@ -447,8 +468,9 @@ def main():
         
         print(f"  🆔 ID Partita: {match_id}")
         
+        # === CARICA PAGINA PARTITA ===
         odds_url = f"{href},tab:additional_odds"
-        odds_html = fetch_page(odds_url)
+        odds_html = fetch_match_page(odds_url)
         
         if not odds_html:
             print(f"  ❌ Errore caricamento pagina")
@@ -457,8 +479,8 @@ def main():
         
         tree = html.fromstring(odds_html)
         
+        # === ESTRAI DATI ===
         squadra_casa, squadra_trasferta = extract_team_names(tree)
-        
         if not squadra_casa or not squadra_trasferta:
             print(f"  ⚠️  SKIP: Impossibile estrarre squadre")
             error_count += 1
@@ -470,17 +492,14 @@ def main():
         quote1, quotex, quote2 = None, None, None
         if stato == 'NG':
             quote1, quotex, quote2 = extract_odds(tree)
-            if quote1 and quotex and quote2:
-                print(f"    ℹ️  Partita futura: quote estratte")
-            else:
+            if not all([quote1, quotex, quote2]):
                 print(f"    ⚠️  Quote non disponibili, SKIP")
                 error_count += 1
                 continue
-        else:
-            print(f"    ℹ️  Partita {stato}: solo dati partita (no quote)")
         
+        # === PREPARA DATI ===
         match_data = {
-            'id': match_id,
+            'id': match_id,  # ← ORA È DEFINITO
             'giornata': giornata,
             'casa': squadra_casa,
             'trasferta': squadra_trasferta,
@@ -493,16 +512,18 @@ def main():
         }
         
         if quote1 and quotex and quote2:
-            match_data['quota1'] = quote1
-            match_data['quotax'] = quotex
-            match_data['quota2'] = quote2
+            match_data.update({
+                'quota1': quote1,
+                'quotax': quotex,
+                'quota2': quote2
+            })
         
+        # === SALVA SU SUPABASE ===
         if insert_or_update_match(supabase, match_data):
             success_count += 1
         else:
             error_count += 1
         
-        print()
         time.sleep(2)
     
     print("=" * 60)
