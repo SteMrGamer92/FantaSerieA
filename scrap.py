@@ -246,8 +246,8 @@ def extract_odds(tree):
     quote2 = None
     
     try:
-        # METODO 1: XPath assoluto (dovrebbe funzionare)
-        xpath_quote1 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[4]"
+        # ✅ METODO 1: XPath assoluto (FUNZIONA)
+        xpath_quote1 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[1]/div/span"
         xpath_quotex = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[2]/div/span"
         xpath_quote2 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[3]/div/span"
         
@@ -269,37 +269,58 @@ def extract_odds(tree):
                 print(f"    2️⃣  Quota 2: {quote2}")
                 return quote1, quotex, quote2
         
-        # METODO 2: Classe CSS (dall'elemento che hai postato)
-        xpath_class = "//span[contains(@class, 'textStyle_display') and contains(@class, 'micro')]"
+        # ✅ METODO 2: XPath con classe CSS (FUNZIONA)
+        print("    ⚠️  Metodo 1 fallito, provo Metodo 2...")
+        xpath_class = "//div[contains(@class, 'd_flex') and contains(@class, 'ai_center')]//a//span[contains(@class, 'textStyle_display')]"
         elements = tree.xpath(xpath_class)
         
         quotes = []
         for element in elements:
             text = element.text_content().strip()
             if re.match(r'^\d+\.\d+$', text):
-                quotes.append(float(text))
+                try:
+                    quota = float(text)
+                    # ✅ FILTRO: solo quote realistiche (1.00 - 50.00)
+                    if 1.0 <= quota <= 50.0:
+                        quotes.append(quota)
+                        if len(quotes) == 3:  # ✅ STOP AI PRIMI 3
+                            break
+                except ValueError:
+                    continue
         
         if len(quotes) >= 3:
             quote1, quotex, quote2 = quotes[0], quotes[1], quotes[2]
-            print(f"    1️⃣  Quota 1 (classe): {quote1}")
-            print(f"    ❌ Quota X (classe): {quotex}")
-            print(f"    2️⃣  Quota 2 (classe): {quote2}")
+            print(f"    1️⃣  Quota 1 (metodo 2): {quote1}")
+            print(f"    ❌ Quota X (metodo 2): {quotex}")
+            print(f"    2️⃣  Quota 2 (metodo 2): {quote2}")
             return quote1, quotex, quote2
         
-        # METODO 3: Pattern numerico globale
+        # ✅ METODO 3: Pattern numerico GLOBALE (ULTIMA RISORSA)
+        print("    ⚠️  Metodo 2 fallito, provo Metodo 3 (pattern globale)...")
         all_spans = tree.xpath("//span")
         quotes = []
+        
         for span in all_spans:
             text = span.text_content().strip()
             if re.match(r'^\d+\.\d+$', text):
-                quotes.append(float(text))
+                try:
+                    quota = float(text)
+                    # ✅ FILTRO: solo quote realistiche
+                    if 1.0 <= quota <= 50.0:
+                        quotes.append(quota)
+                        if len(quotes) == 3:  # ✅ STOP AI PRIMI 3
+                            break
+                except ValueError:
+                    continue
         
         if len(quotes) >= 3:
             quote1, quotex, quote2 = quotes[0], quotes[1], quotes[2]
-            print(f"    1️⃣  Quota 1 (pattern): {quote1}")
-            print(f"    ❌ Quota X (pattern): {quotex}")
-            print(f"    2️⃣  Quota 2 (pattern): {quote2}")
+            print(f"    1️⃣  Quota 1 (metodo 3): {quote1}")
+            print(f"    ❌ Quota X (metodo 3): {quotex}")
+            print(f"    2️⃣  Quota 2 (metodo 3): {quote2}")
             return quote1, quotex, quote2
+        
+        print("    ❌ NESSUN METODO HA TROVATO LE QUOTE")
     
     except Exception as e:
         print(f"    ❌ Errore extract_odds: {e}")
@@ -560,6 +581,7 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
 
 
