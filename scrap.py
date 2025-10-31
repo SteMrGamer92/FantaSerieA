@@ -327,18 +327,32 @@ def extract_goals(tree, stato):
     goaltrasferta = None
     
     try:
-        # METODO 1: XPath assoluto per il punteggio principale
-        score_xpath_abs = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div/div[2]/div/span"
-        score_elements = tree.xpath(score_xpath_abs)
-        
-        if score_elements:
-            text = score_elements[0].text_content().strip()
-            if re.match(r'^\d+\s*-\s*\d+$', text):
-                parts = text.split('-')
-                goalcasa = int(parts[0].strip())
-                goaltrasferta = int(parts[1].strip())
-                print(f"    ⚽ Goal (XPath assoluto): {goalcasa}-{goaltrasferta}")
+        # METODO 1: XPath assoluto 
+        xpath_goalcasa = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[1]"
+        xpath_goaltrasferta = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[3]"
+
+        # Estrazione diretta degli elementi
+        element_casa = tree.xpath(xpath_goalcasa)
+        element_trasferta = tree.xpath(xpath_goaltrasferta)
+
+        # Verifica che entrambi gli elementi esistano
+        if element_casa and element_trasferta:
+            goalcasa_text = element_casa[0].text_content().strip()
+            goaltrasferta_text = element_trasferta[0].text_content().strip()
+            
+            # Conversione in interi (con gestione errori opzionale)
+            try:
+                goalcasa = int(goalcasa_text)
+                goaltrasferta = int(goaltrasferta_text)
+                print(f"    ⚽ Goal (XPath esatti): {goalcasa}-{goaltrasferta}")
                 return goalcasa, goaltrasferta
+            except ValueError:
+                print("    Errore: uno dei valori non è un numero valido.")
+                return None, None
+        else:
+            print("    Elementi non trovati con gli XPath specificati.")
+            return None, None
+
         
         # METODO 2: Cerca elementi che contengono solo numeri singoli
         single_numbers_xpath = "//span[string-length(text()) <= 2 and string-length(text()) >= 1 and not(contains(text(), '-'))]"
