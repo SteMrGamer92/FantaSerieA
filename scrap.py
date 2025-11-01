@@ -147,88 +147,95 @@ def fetch_tournament_page(url, target_giornata=10):
         return None
 
 def fetch_match_page(url):
-    """Recupera HTML partita cliccando su 'Altre quote' se presente"""
+    """Recupera HTML partita con viewport tablet e click su tab Odds"""
     try:
         with sync_playwright() as p:
             print(f"  Avvio browser per partita: {url}")
-            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
             
-            # Viewport desktop (torna alle dimensioni normali)
-            context = browser.new_context(
-                viewport={'width': 1920, 'height': 1080},
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            # ✅ VIEWPORT TABLET 768x1024
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                ]
             )
+            
+            context = browser.new_context(
+                viewport={'width': 768, 'height': 1024},
+                user_agent='Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
+                # ✅ Blocca solo cookies, NON immagini/JS
+                java_script_enabled=True,
+                accept_downloads=False,
+            )
+            
+            # ✅ Blocca solo cookies
             page = context.new_page()
             
+            # Blocca richieste cookies
+            page.route("**/*", lambda route: route.abort() if "cookie" in route.request.url.lower() else route.continue_())
+            
             page.goto(url, wait_until='domcontentloaded', timeout=60000)
-            
-            # ✅ CERCA E CLICCA "ALTRE QUOTE" / "MORE ODDS"
-            print("  🔍 Ricerca pulsante 'Altre quote'...")
-            altre_quote_selectors = [
-                "button:has-text('Altre quote')",
-                "button:has-text('altre quote')",
-                "button:has-text('More odds')",
-                "button:has-text('more odds')",
-                "a:has-text('Altre quote')",
-                "a:has-text('More odds')",
-                "//button[contains(translate(text(), 'ALTRE', 'altre'), 'altre quote')]",
-                "//button[contains(translate(text(), 'MORE', 'more'), 'more odds')]",
-                "//a[contains(translate(text(), 'ALTRE', 'altre'), 'altre quote')]",
-            ]
-            
-            clicked = False
-            for selector in altre_quote_selectors:
-                try:
-                    if selector.startswith('//'):
-                        # XPath
-                        page.wait_for_selector(f'xpath={selector}', timeout=5000, state='visible')
-                        page.click(f'xpath={selector}')
-                    else:
-                        # CSS Selector
-                        page.wait_for_selector(selector, timeout=5000, state='visible')
-                        page.click(selector)
-                    
-                    print(f"  ✅ Cliccato 'Altre quote': {selector}")
-                    time.sleep(3)  # Attendi caricamento modale/espansione
-                    clicked = True
-                    break
-                except:
-                    continue
-            
-            if not clicked:
-                print("  ℹ️  Pulsante 'Altre quote' non trovato (quote già visibili)")
-            
-            # ✅ SCREENSHOT PRIMA (prima dello scroll)
-            match_id = url.split('#id:')[1] if '#id:' in url else 'unknown'
-            page.screenshot(
-                path=f'/tmp/screenshot_{match_id}_before_scroll.png',
-                full_page=False  # Solo viewport visibile
-            )
-            print(f"  📸 Screenshot BEFORE scroll salvato")
-            
-            # Attendi caricamento quote
-            print("  ⏳ Attesa caricamento quote...")
-            page.wait_for_selector('span[class*="textStyle_display"]', timeout=45000)
             time.sleep(3)
             
-            # Scroll
+            match_id = url.split('#id:')[1] if '#id:' in url else 'unknown'
+            
+            # Screenshot iniziale
+            page.screenshot(path=f'/tmp/screenshot_{match_id}_step1_tablet.png')
+            print(f"  📸 Step 1: Pagina caricata (tablet 768x1024)")
+            
+            # ✅ CLICCA TAB ODDS CON XPATH CHE HAI TROVATO
+            print("  🎯 Click su tab Odds...")
+            xpath_odds_tab = "/html/body/div[1]/main/div[1]/div[2]/div[1]/div/div/div/div/div/button[2]/a"
+            
+            try:
+                # Attendi che sia visibile
+                page.wait_for_selector(f'xpath={xpath_odds_tab}', timeout=10000, state='visible')
+                
+                # Click
+                page.click(f'xpath={xpath_odds_tab}')
+                print(f"  ✅ Tab Odds cliccata!")
+                
+                time.sleep(4)  # Attendi caricamento contenuto
+                
+                # Screenshot dopo click
+                page.screenshot(path=f'/tmp/screenshot_{match_id}_step2_after_odds_click.png')
+                print(f"  📸 Step 2: Dopo click tab Odds")
+                
+            except Exception as e:
+                print(f"  ⚠️  Tab Odds non trovata: {e}")
+                # Continua comunque
+            
+            # ✅ ATTENDI CARICAMENTO QUOTE (formato normale, non +125/-500)
+            print("  ⏳ Attesa caricamento quote...")
+            try:
+                # Aspetta span con quote normali (formato X.XX)
+                page.wait_for_selector('span[class*="textStyle"]', timeout=30000)
+                time.sleep(3)
+            except:
+                print("  ⚠️  Timeout attesa quote")
+            
+            # Screenshot prima dello scroll
+            page.screenshot(path=f'/tmp/screenshot_{match_id}_step3_before_scroll.png')
+            print(f"  📸 Step 3: Prima dello scroll")
+            
+            # ✅ SCROLL GRADUALE
+            print("  📜 Scrolling...")
             for i in range(5):
                 page.evaluate(f"window.scrollTo(0, {(i + 1) * 600})")
                 time.sleep(0.5)
+            
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             time.sleep(2)
             
-            # ✅ SCREENSHOT DOPO (dopo lo scroll)
-            page.screenshot(
-                path=f'/tmp/screenshot_{match_id}_after_scroll.png',
-                full_page=True
-            )
-            print(f"  📸 Screenshot AFTER scroll salvato (full page)")
-
-            html_content = page.content()
-            print(f"  📄 HTML partita: {len(html_content):,} byte")
+            # Screenshot finale (full page)
+            page.screenshot(path=f'/tmp/screenshot_{match_id}_step4_final_fullpage.png', full_page=True)
+            print(f"  📸 Step 4: Dopo scroll (full page)")
             
-            # Salva HTML
+            # Estrai HTML
+            html_content = page.content()
+            print(f"  📄 HTML: {len(html_content):,} byte")
+            
             save_html_debug(html_content, f"match_{match_id}.html")
             
             browser.close()
@@ -593,6 +600,7 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
 
 
