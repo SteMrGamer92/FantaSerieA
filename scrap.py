@@ -147,57 +147,67 @@ def fetch_tournament_page(url, target_giornata=10):
         return None
 
 def fetch_match_page(url):
-    """Recupera HTML partita con viewport ridotto per testare layout mobile"""
+    """Recupera HTML partita cliccando su 'Altre quote' se presente"""
     try:
         with sync_playwright() as p:
             print(f"  Avvio browser per partita: {url}")
             browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
             
-            # ✅ VIEWPORT RIDOTTO (simula tablet)
+            # Viewport desktop (torna alle dimensioni normali)
             context = browser.new_context(
-                viewport={'width': 768, 'height': 1024},  # iPad portrait
-                user_agent='Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             )
             page = context.new_page()
             
             page.goto(url, wait_until='domcontentloaded', timeout=60000)
             
-            # ✅ ATTENDI E CLICCA TAB "QUOTE" SE PRESENTE
-            print("  Ricerca tab Quote/Odds...")
-            try:
-                # Prova a cliccare tab "Quote" o "Odds"
-                tab_selectors = [
-                    "button:has-text('Quote')",
-                    "button:has-text('Odds')",
-                    "a:has-text('Quote')",
-                    "div[role='tab']:has-text('Quote')",
-                    "//button[contains(text(), 'Quote') or contains(text(), 'Odds')]"
-                ]
-                
-                for selector in tab_selectors:
-                    try:
-                        if selector.startswith('//'):
-                            # XPath
-                            page.wait_for_selector(f'xpath={selector}', timeout=5000)
-                            page.click(f'xpath={selector}')
-                        else:
-                            # CSS Selector
-                            page.wait_for_selector(selector, timeout=5000)
-                            page.click(selector)
-                        
-                        print(f"  ✅ Cliccato su tab Quote: {selector}")
-                        time.sleep(2)  # Attendi caricamento contenuto
-                        break
-                    except:
-                        continue
-                else:
-                    print("  ℹ️  Nessuna tab Quote trovata (probabilmente già visibile)")
+            # ✅ CERCA E CLICCA "ALTRE QUOTE" / "MORE ODDS"
+            print("  🔍 Ricerca pulsante 'Altre quote'...")
+            altre_quote_selectors = [
+                "button:has-text('Altre quote')",
+                "button:has-text('altre quote')",
+                "button:has-text('More odds')",
+                "button:has-text('more odds')",
+                "a:has-text('Altre quote')",
+                "a:has-text('More odds')",
+                "//button[contains(translate(text(), 'ALTRE', 'altre'), 'altre quote')]",
+                "//button[contains(translate(text(), 'MORE', 'more'), 'more odds')]",
+                "//a[contains(translate(text(), 'ALTRE', 'altre'), 'altre quote')]",
+            ]
             
-            except Exception as e:
-                print(f"  ⚠️  Errore ricerca tab: {e}")
+            clicked = False
+            for selector in altre_quote_selectors:
+                try:
+                    if selector.startswith('//'):
+                        # XPath
+                        page.wait_for_selector(f'xpath={selector}', timeout=5000, state='visible')
+                        page.click(f'xpath={selector}')
+                    else:
+                        # CSS Selector
+                        page.wait_for_selector(selector, timeout=5000, state='visible')
+                        page.click(selector)
+                    
+                    print(f"  ✅ Cliccato 'Altre quote': {selector}")
+                    time.sleep(3)  # Attendi caricamento modale/espansione
+                    clicked = True
+                    break
+                except:
+                    continue
             
-            # Attendi quote
-            print("  Attesa caricamento quote...")
+            if not clicked:
+                print("  ℹ️  Pulsante 'Altre quote' non trovato (quote già visibili)")
+            
+            # ✅ SCREENSHOT PRIMA (prima dello scroll)
+            match_id = url.split('#id:')[1] if '#id:' in url else 'unknown'
+            page.screenshot(
+                path=f'/tmp/screenshot_{match_id}_before_scroll.png',
+                full_page=False  # Solo viewport visibile
+            )
+            print(f"  📸 Screenshot BEFORE scroll salvato")
+            
+            # Attendi caricamento quote
+            print("  ⏳ Attesa caricamento quote...")
             page.wait_for_selector('span[class*="textStyle_display"]', timeout=45000)
             time.sleep(3)
             
@@ -207,22 +217,25 @@ def fetch_match_page(url):
                 time.sleep(0.5)
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             time.sleep(2)
+            
+            # ✅ SCREENSHOT DOPO (dopo lo scroll)
+            page.screenshot(
+                path=f'/tmp/screenshot_{match_id}_after_scroll.png',
+                full_page=True
+            )
+            print(f"  📸 Screenshot AFTER scroll salvato (full page)")
 
             html_content = page.content()
-            print(f"  HTML partita: {len(html_content):,} byte")
+            print(f"  📄 HTML partita: {len(html_content):,} byte")
             
-            # Salva HTML e screenshot
-            match_id = url.split('#id:')[1] if '#id:' in url else 'unknown'
+            # Salva HTML
             save_html_debug(html_content, f"match_{match_id}.html")
-            
-            # ✅ SCREENSHOT CON VIEWPORT RIDOTTO
-            page.screenshot(path=f'/tmp/screenshot_{match_id}.png', full_page=True)
-            print(f"  📸 Screenshot salvato (768x1024)")
             
             browser.close()
             return html_content
+            
     except Exception as e:
-        print(f"ERRORE PARTITA: {e}")
+        print(f"❌ ERRORE PARTITA: {e}")
         traceback.print_exc()
         return None
 
@@ -580,6 +593,7 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
 
 
