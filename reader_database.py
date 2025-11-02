@@ -218,10 +218,11 @@ class DatabaseReader:
             giornata: Numero giornata (None = tutte)
         
         Returns:
-            Lista di dict con {IDpartita, scelta, punti, giornata}
+            Lista di dict con {IDpartita, scelta, quota, punti, giornata, puntata}
         """
         try:
-            query = self.client.table('Schedine').select('IDpartita, scelta, punti, giornata')
+            # ✅ AGGIUNGI 'quota' E 'puntata' AL SELECT
+            query = self.client.table('Schedine').select('IDpartita, scelta, quota, punti, giornata, puntata')
             query = query.eq('IDutente', user_id)
             
             if giornata:
