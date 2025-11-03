@@ -210,19 +210,8 @@ class DatabaseReader:
             return []
 
     def get_user_schedine(self, user_id: int, giornata: Optional[int] = None) -> List[Dict[str, Any]]:
-        """
-        Recupera le schedine di un utente per una giornata
-        
-        Args:
-            user_id: ID dell'utente
-            giornata: Numero giornata (None = tutte)
-        
-        Returns:
-            Lista di dict con {IDpartita, scelta, quota, punti, giornata, puntata}
-        """
         try:
-            # ✅ AGGIUNGI 'quota' E 'puntata' AL SELECT
-            query = self.client.table('Schedine').select('IDpartita, scelta, quota, punti, giornata, puntata')
+            query = self.client.table('Schedine').select('IDpartita, scelta, punti, giornata, puntata')
             query = query.eq('IDutente', user_id)
             
             if giornata:
