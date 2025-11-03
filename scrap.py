@@ -13,6 +13,8 @@ import traceback
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://ipqxjudlxcqacgtmpkzx.supabase.co')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwcXhqdWRseGNxYWNndG1wa3p4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTEyNjU3OSwiZXhwIjoyMDc0NzAyNTc5fQ.9nMpSeM-p5PvnF3rwMeR_zzXXocyfzYV24vau3AcDso')
 
+ORA_LEGALE_OFFSET = 1
+
 def init_supabase():
     """Inizializza il client Supabase"""
     try:
@@ -251,12 +253,13 @@ def extract_team_names(tree):
     return squadra_casa, squadra_trasferta
 
 def extract_match_info(tree):
-    """Estrae data, ora e stato della partita"""
+    """Estrae data, ora e stato della partita (con ora legale)"""
     data = None
     ora = None
     stato = None
     
     try:
+        # ESTRAZIONE DATA
         data_xpath = "//span[contains(text(), 'Oggi') or contains(text(), 'Domani') or contains(text(), '/202') or contains(text(), '-202')]"
         data_elements = tree.xpath(data_xpath)
         
@@ -276,21 +279,46 @@ def extract_match_info(tree):
                 data = text
                 break
         
+        # ESTRAZIONE ORA
         ora_xpath = "//span[contains(text(), ':') and string-length(text()) <= 5 and string-length(text()) >= 4]"
         ora_elements = tree.xpath(ora_xpath)
         
         for element in ora_elements:
             text = element.text_content().strip()
             if re.match(r'\d{2}:\d{2}', text):
-                ora = text + ":00"
+                # ✅ APPLICA ORA LEGALE
+                ora_parsed = datetime.strptime(text, '%H:%M')
+                ora_corretta = ora_parsed + timedelta(hours=ORA_LEGALE_OFFSET)
+                ora = ora_corretta.strftime('%H:%M') + ":00"
+                print(f"    🕐 Ora estratta: {text} → Ora corretta (+{ORA_LEGALE_OFFSET}h): {ora}")
                 break
         
+        # DETERMINA STATO
         if data and ora:
             match_datetime = datetime.strptime(f"{data} {ora[:5]}", '%Y-%m-%d %H:%M')
             cest = pytz.timezone('Europe/Rome')
             match_datetime = cest.localize(match_datetime)
             now = datetime.now(cest)
-            stato = 'NG' if now < match_datetime else 'F'
+            
+            # ✅ VERIFICA SE PARTITA È FINITA
+            finita_xpath = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div[1]/div/div/a/div/div[2]/div[2]/div/div/div[2]/div/span/span"
+            finita_elements = tree.xpath(finita_xpath)
+            
+            is_finished = False
+            if finita_elements:
+                status_text = finita_elements[0].text_content().strip().lower()
+                if 'finita' in status_text or 'end' in status_text:
+                    is_finished = True
+                    print(f"    ✅ Partita FINITA rilevata: '{status_text}'")
+            
+            if is_finished:
+                stato = 'F'
+            elif now >= match_datetime:
+                # Partita iniziata ma non ancora finita
+                stato = 'IC'
+                print(f"    ⚽ Partita IN CORSO (orario passato ma non finita)")
+            else:
+                stato = 'NG'
         
         if data and ora:
             print(f"    📅 Data: {data} {ora}")
@@ -304,7 +332,7 @@ def extract_match_info(tree):
 
 def extract_goals(tree, stato):
     """Estrae i goal solo se la partita è finita"""
-    if stato != 'F':
+    if stato not in ['F', 'IC']:
         return None, None
     
     goalcasa = None
@@ -429,3 +457,4 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
