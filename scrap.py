@@ -418,7 +418,10 @@ def main():
             continue
         
         data_match, ora, stato = extract_match_info(tree)
-        goalcasa, goaltrasferta = extract_goals(tree, stato)
+        goalcasa = None
+        goaltrasferta = None
+        if stato in ['F', 'IC']:
+            goalcasa, goaltrasferta = extract_goals(tree, stato)
         
         match_data = {
             'id': match_id,
@@ -457,4 +460,5 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
