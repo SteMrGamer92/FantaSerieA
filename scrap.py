@@ -23,29 +23,7 @@ def init_supabase():
         print(f"❌ Errore connessione Supabase: {e}")
         traceback.print_exc()
         return None
-        
-def save_html_debug(html_content, filename="debug_match.html"):
-    """Salva HTML per debug (funziona su GitHub Actions e locale)"""
-    try:
-        import os
-        
-        # Su GitHub Actions usa /tmp, localmente Desktop
-        if os.path.exists('/tmp'):
-            save_dir = '/tmp'
-        else:
-            save_dir = os.path.join(os.path.expanduser("~"), "Desktop")
-        
-        filepath = os.path.join(save_dir, filename)
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-        
-        print(f"💾 HTML salvato: {filepath} ({len(html_content):,} byte)")
-        return filepath
-    except Exception as e:
-        print(f"❌ Errore salvataggio HTML: {e}")
-        return None
-        
+
 def check_match_exists(supabase, match_id):
     """Verifica se una partita esiste già nel database"""
     try:
@@ -94,49 +72,45 @@ def fetch_tournament_page(url, target_giornata=10):
             page = context.new_page()
 
             print(f"  Caricamento: {url}")
-            page.goto(url, wait_until='domcontentloaded', timeout=60000)
+            page.goto(url, wait_until='domcontentloaded', timeout=90000)
 
-            # === BOTTONE TENDINA ===
+            # BOTTONE TENDINA
             button_xpath = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[2]/div[2]/div[2]/div/div/div[1]/div/div/button"
             print("  Apertura tendina...")
             try:
-                page.wait_for_selector(f'xpath={button_xpath}', state='visible', timeout=30000)
+                page.wait_for_selector(f'xpath={button_xpath}', state='visible', timeout=45000)
                 page.eval_on_selector(f'xpath={button_xpath}', "el => el.click()")
                 print("  Tendina aperta")
             except Exception as e:
                 print(f"  BOTTONE NON TROVATO: {e}")
-                page.screenshot(path="/tmp/debug_button.png", full_page=True)
                 browser.close()
                 return None
 
-            # === ATTESA PORTAL (2 secondi) ===
             print("  Attesa portal menu (2s)...")
             time.sleep(2)
 
-            # === GIORNATA 10 ===
+            # GIORNATA
             giornata_selector = f'ul.dropdown__list li:has-text("Round {target_giornata}")'
             print(f"  Selezione Round {target_giornata}...")
             try:
                 locator = page.locator(giornata_selector)
-                locator.wait_for(state='visible', timeout=20000)
+                locator.wait_for(state='visible', timeout=30000)
                 locator.click(force=True)
                 print(f"  Cliccato Round {target_giornata}")
             except Exception as e:
                 print(f"  GIORNATA NON TROVATA: {e}")
-                page.screenshot(path="/tmp/debug_giornata_fail.png", full_page=True)
                 browser.close()
                 return None
 
-            # === ATTESA PARTITE ===
+            # ATTESA PARTITE
             print("  Attesa partite...")
-            page.wait_for_selector('a[href*="/match/"]', timeout=60000)  # ← 60s invece di 40s
-            time.sleep(5)  # ← Attesa fissa invece di networkidle
+            page.wait_for_selector('a[href*="/match/"]', timeout=60000)
+            time.sleep(5)
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             time.sleep(3)
 
             html_content = page.content()
             print(f"  HTML scaricato: {len(html_content):,} byte")
-            page.screenshot(path="/tmp/debug_final.png", full_page=True)
 
             browser.close()
             return html_content
@@ -147,7 +121,7 @@ def fetch_tournament_page(url, target_giornata=10):
         return None
 
 def fetch_match_page(url):
-    """Recupera HTML partita (SENZA quote)"""
+    """Recupera HTML partita (SENZA estrazione, solo screenshot finale)"""
     try:
         with sync_playwright() as p:
             print(f"  Avvio browser per partita: {url}")
@@ -163,7 +137,22 @@ def fetch_match_page(url):
             
             match_id = url.split('#id:')[1] if '#id:' in url else 'unknown'
             
-            time.sleep(3)  # Attesa base
+            # Attesa base
+            time.sleep(3)
+            
+            # Scroll
+            for i in range(5):
+                page.evaluate(f"window.scrollTo(0, {(i + 1) * 600})")
+                time.sleep(0.5)
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            time.sleep(2)
+            
+            # ✅ SOLO SCREENSHOT FINALE
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            screenshot_path = os.path.join(temp_dir, f'screenshot_{match_id}_final.png')
+            page.screenshot(path=screenshot_path, full_page=True)
+            print(f"  📸 Screenshot salvato: {screenshot_path}")
             
             html_content = page.content()
             print(f"  📄 HTML: {len(html_content):,} byte")
@@ -173,6 +162,7 @@ def fetch_match_page(url):
             
     except Exception as e:
         print(f"❌ ERRORE PARTITA: {e}")
+        traceback.print_exc()
         return None
 
 def extract_match_id_from_url(href):
@@ -192,7 +182,6 @@ def extract_match_hrefs(html_content, target_giornata=None):
         tree = html.fromstring(html_content)
         results = []
 
-        # Verifica giornata corrente
         giornata_xpath = "//div[contains(@class, 'Box')]//button/span[contains(text(), 'Round')]"
         giornata_elements = tree.xpath(giornata_xpath)
         current_giornata = None
@@ -314,7 +303,7 @@ def extract_match_info(tree):
     return data, ora, stato
 
 def extract_goals(tree, stato):
-    """Estrae i goal solo se la partita è finita - 4 metodi"""
+    """Estrae i goal solo se la partita è finita"""
     if stato != 'F':
         return None, None
     
@@ -322,20 +311,16 @@ def extract_goals(tree, stato):
     goaltrasferta = None
     
     try:
-        # METODO 1: XPath assoluto 
         xpath_goalcasa = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[1]"
         xpath_goaltrasferta = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[3]"
 
-        # Estrazione diretta degli elementi
         element_casa = tree.xpath(xpath_goalcasa)
         element_trasferta = tree.xpath(xpath_goaltrasferta)
 
-        # Verifica che entrambi gli elementi esistano
         if element_casa and element_trasferta:
             goalcasa_text = element_casa[0].text_content().strip()
             goaltrasferta_text = element_trasferta[0].text_content().strip()
             
-            # Conversione in interi (con gestione errori opzionale)
             try:
                 goalcasa = int(goalcasa_text)
                 goaltrasferta = int(goaltrasferta_text)
@@ -347,55 +332,7 @@ def extract_goals(tree, stato):
         else:
             print("    Elementi non trovati con gli XPath specificati.")
             return None, None
-
         
-        # METODO 2: Cerca elementi che contengono solo numeri singoli
-        single_numbers_xpath = "//span[string-length(text()) <= 2 and string-length(text()) >= 1 and not(contains(text(), '-'))]"
-        number_elements = tree.xpath(single_numbers_xpath)
-        
-        scores = []
-        for element in number_elements:
-            text = element.text_content().strip()
-            try:
-                score = int(text)
-                if 0 <= score <= 99:  # Solo numeri ragionevoli per un punteggio
-                    scores.append(score)
-            except ValueError:
-                continue
-        
-        # Prendi i primi 2 numeri trovati
-        if len(scores) >= 2:
-            goalcasa = scores[0]
-            goaltrasferta = scores[1]
-            print(f"    ⚽ Goal (numeri singoli): {goalcasa}-{goaltrasferta}")
-            return goalcasa, goaltrasferta
-        
-        # METODO 3: Cerca span con pattern X-Y
-        score_full_xpath = "//span[contains(text(), '-')]"
-        elements = tree.xpath(score_full_xpath)
-        
-        for element in elements:
-            text = element.text_content().strip()
-            # Match pattern tipo "3 - 1" o "3-1"
-            if re.match(r'^\d{1,2}\s*-\s*\d{1,2}$', text):
-                parts = text.split('-')
-                goalcasa = int(parts[0].strip())
-                goaltrasferta = int(parts[1].strip())
-                print(f"    ⚽ Goal (pattern X-Y): {goalcasa}-{goaltrasferta}")
-                return goalcasa, goaltrasferta
-        
-        # METODO 4: Regex su tutto il testo (ultimo tentativo)
-        full_text = tree.text_content()
-        # Cerca pattern X-Y circondato da spazi o inizio/fine stringa
-        score_match = re.search(r'(?:^|\s)(\d{1,2})\s*-\s*(\d{1,2})(?:\s|$)', full_text)
-        if score_match:
-            goalcasa = int(score_match.group(1))
-            goaltrasferta = int(score_match.group(2))
-            print(f"    ⚽ Goal (regex globale): {goalcasa}-{goaltrasferta}")
-            return goalcasa, goaltrasferta
-        
-        print(f"    ⚠️ Goal non trovati (partita finita ma punteggio non visibile)")
-    
     except Exception as e:
         print(f"    ❌ Errore extract_goals: {e}")
         traceback.print_exc()
@@ -412,7 +349,6 @@ def main():
         print("Impossibile connettersi a Supabase")
         sys.exit(1)
     
-    # SCEGLI TU LA GIORNATA
     TARGET_GIORNATA = 10
     tournament_url = 'https://www.sofascore.com/it/torneo/calcio/italy/serie-a/23#id:76457#tab:matches'
 
@@ -430,7 +366,6 @@ def main():
     for idx, (giornata, href) in enumerate(data, 1):
         print(f"[{idx}/{len(data)}] " + "=" * 50)
         
-        # === ESTRAI ID PARTITA ===
         match_id = extract_match_id_from_url(href)
         if not match_id:
             print(f"  ⚠️  SKIP: ID non valido")
@@ -439,9 +374,7 @@ def main():
         
         print(f"  🆔 ID Partita: {match_id}")
         
-        # === CARICA PAGINA PARTITA ===
-        odds_url = href
-        odds_html = fetch_match_page(odds_url)
+        odds_html = fetch_match_page(href)
         
         if not odds_html:
             print(f"  ❌ Errore caricamento pagina")
@@ -450,7 +383,6 @@ def main():
         
         tree = html.fromstring(odds_html)
         
-        # === ESTRAI DATI ===
         squadra_casa, squadra_trasferta = extract_team_names(tree)
         if not squadra_casa or not squadra_trasferta:
             print(f"  ⚠️  SKIP: Impossibile estrarre squadre")
@@ -473,7 +405,6 @@ def main():
             'href': href
         }
         
-        # === SALVA SU SUPABASE ===
         if insert_or_update_match(supabase, match_data):
             success_count += 1
         else:
@@ -498,16 +429,3 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
-
-
-
-
-
-
-
-
-
-
-
-
-
