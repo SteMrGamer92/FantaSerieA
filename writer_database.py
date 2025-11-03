@@ -121,16 +121,6 @@ class DatabaseWriter:
             return None
             
     def create_schedina(self, user_id: int, scommesse: List[Dict[str, Any]]) -> bool:
-        """
-        Crea o aggiorna una schedina inserendo/modificando una riga per ogni scommessa
-        
-        Args:
-            user_id: ID dell'utente
-            scommesse: Lista di dict con {match_id, bet_type, quota, puntata}
-        
-        Returns:
-            True se tutte le scommesse sono state salvate, False altrimenti
-        """
         try:
             if not self.client:
                 return False
@@ -150,8 +140,7 @@ class DatabaseWriter:
                     
                     update_data = {
                         'scelta': bet_type,
-                        'quota': quota,
-                        'puntata': puntata,  # ✅ Aggiorna anche la puntata
+                        'puntata': puntata, 
                     }
                     
                     response = self.client.table('Schedine').update(update_data).eq('id', schedina_id).execute()
@@ -166,8 +155,7 @@ class DatabaseWriter:
                     insert_data = {
                         'IDpartita': match_id,
                         'IDutente': user_id,
-                        'quota': quota,
-                        'puntata': puntata,  # ✅ Usa puntata variabile
+                        'puntata': puntata,
                         'scelta': bet_type,
                     }
                     
