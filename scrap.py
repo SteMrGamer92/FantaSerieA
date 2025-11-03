@@ -23,36 +23,6 @@ def init_supabase():
         print(f"❌ Errore connessione Supabase: {e}")
         traceback.print_exc()
         return None
-
-def convert_american_to_european(american_odd):
-    """
-    Converte quota americana in europea
-    
-    Esempi:
-    +125 → 2.25
-    -500 → 1.20
-    +200 → 3.00
-    -150 → 1.67
-    """
-    try:
-        # Rimuovi eventuali spazi
-        american_odd = str(american_odd).strip()
-        
-        # Estrai il numero
-        odd = int(american_odd)
-        
-        if odd > 0:
-            # Quote positive (underdog): (odd / 100) + 1
-            european = (odd / 100.0) + 1.0
-        else:
-            # Quote negative (favorite): (100 / abs(odd)) + 1
-            european = (100.0 / abs(odd)) + 1.0
-        
-        return round(european, 2)
-    
-    except Exception as e:
-        print(f"    ⚠️  Errore conversione '{american_odd}': {e}")
-        return None
         
 def save_html_debug(html_content, filename="debug_match.html"):
     """Salva HTML per debug (funziona su GitHub Actions e locale)"""
@@ -177,16 +147,11 @@ def fetch_tournament_page(url, target_giornata=10):
         return None
 
 def fetch_match_page(url):
-    """Recupera HTML partita con viewport desktop e scroll"""
+    """Recupera HTML partita (SENZA quote)"""
     try:
         with sync_playwright() as p:
             print(f"  Avvio browser per partita: {url}")
-            
-            # ✅ VIEWPORT DESKTOP (funziona meglio per le quote)
-            browser = p.chromium.launch(
-                headless=True,
-                args=['--no-sandbox', '--disable-setuid-sandbox']
-            )
+            browser = p.chromium.launch(headless=True, args=['--no-sandbox'])
             
             context = browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
@@ -198,51 +163,16 @@ def fetch_match_page(url):
             
             match_id = url.split('#id:')[1] if '#id:' in url else 'unknown'
             
-            # Screenshot iniziale
-            page.screenshot(path=f'/tmp/screenshot_{match_id}_step1_initial.png')
-            print(f"  📸 Step 1: Pagina caricata")
+            time.sleep(3)  # Attesa base
             
-            # ✅ ATTENDI CARICAMENTO QUOTE
-            print("  ⏳ Attesa caricamento quote...")
-            try:
-                page.wait_for_selector('span[class*="textStyle"]', timeout=45000)
-                time.sleep(3)
-            except:
-                print("  ⚠️  Timeout attesa quote")
-            
-            # Screenshot prima dello scroll
-            page.screenshot(path=f'/tmp/screenshot_{match_id}_step2_before_scroll.png')
-            print(f"  📸 Step 2: Prima dello scroll")
-            
-            # ✅ SCROLL GRADUALE (come già funzionava)
-            print("  📜 Scrolling...")
-            for i in range(5):
-                page.evaluate(f"window.scrollTo(0, {(i + 1) * 600})")
-                time.sleep(0.5)
-            
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            time.sleep(2)
-            
-            # Screenshot dopo scroll
-            page.screenshot(path=f'/tmp/screenshot_{match_id}_step3_after_scroll.png')
-            print(f"  📸 Step 3: Dopo scroll")
-            
-            # Screenshot full page
-            page.screenshot(path=f'/tmp/screenshot_{match_id}_step4_fullpage.png', full_page=True)
-            print(f"  📸 Step 4: Full page")
-            
-            # Estrai HTML
             html_content = page.content()
             print(f"  📄 HTML: {len(html_content):,} byte")
-            
-            save_html_debug(html_content, f"match_{match_id}.html")
             
             browser.close()
             return html_content
             
     except Exception as e:
         print(f"❌ ERRORE PARTITA: {e}")
-        traceback.print_exc()
         return None
 
 def extract_match_id_from_url(href):
@@ -330,108 +260,6 @@ def extract_team_names(tree):
         traceback.print_exc()
     
     return squadra_casa, squadra_trasferta
-
-def extract_odds(tree):
-    """Estrae le quote 1, X, 2 (supporta formato americano e europeo)"""
-    quote1 = None
-    quotex = None
-    quote2 = None
-    
-    def parse_odd(text):
-        """Parser universale quote"""
-        text = text.strip()
-        
-        # Formato europeo: 2.50
-        if re.match(r'^\d+\.\d+$', text):
-            return float(text)
-        
-        # Formato americano: +125 o -500
-        elif re.match(r'^[+-]\d+$', text):
-            converted = convert_american_to_european(text)
-            if converted:
-                print(f"      🔄 Convertito {text} → {converted}")
-            return converted
-        
-        return None
-    
-    try:
-        # ✅ METODO 1: XPath assoluto
-        print("    🎯 METODO 1: XPath assoluto")
-        xpath_quote1 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[1]/div/span"
-        xpath_quotex = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[2]/div/span"
-        xpath_quote2 = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[1]/div/div[2]/div/a[3]/div/span"
-        
-        q1_elements = tree.xpath(xpath_quote1)
-        qx_elements = tree.xpath(xpath_quotex)
-        q2_elements = tree.xpath(xpath_quote2)
-        
-        if q1_elements and qx_elements and q2_elements:
-            text1 = q1_elements[0].text_content().strip()
-            textx = qx_elements[0].text_content().strip()
-            text2 = q2_elements[0].text_content().strip()
-            
-            print(f"      Raw: {text1}, {textx}, {text2}")
-            
-            quote1 = parse_odd(text1)
-            quotex = parse_odd(textx)
-            quote2 = parse_odd(text2)
-            
-            if all([quote1, quotex, quote2]):
-                print(f"    1️⃣  Quota 1: {quote1}")
-                print(f"    ❌ Quota X: {quotex}")
-                print(f"    2️⃣  Quota 2: {quote2}")
-                return quote1, quotex, quote2
-        
-        # ✅ METODO 2: XPath con classe CSS
-        print("    🎯 METODO 2: XPath con classe CSS")
-        xpath_class = "//div[contains(@class, 'd_flex') and contains(@class, 'ai_center')]//a//span[contains(@class, 'textStyle_display')]"
-        elements = tree.xpath(xpath_class)
-        
-        quotes = []
-        for elem in elements:
-            text = elem.text_content().strip()
-            parsed = parse_odd(text)
-            
-            if parsed and 1.0 <= parsed <= 50.0:
-                quotes.append(parsed)
-                if len(quotes) == 3:
-                    break
-        
-        if len(quotes) >= 3:
-            quote1, quotex, quote2 = quotes[0], quotes[1], quotes[2]
-            print(f"    1️⃣  Quota 1: {quote1}")
-            print(f"    ❌ Quota X: {quotex}")
-            print(f"    2️⃣  Quota 2: {quote2}")
-            return quote1, quotex, quote2
-        
-        # ✅ METODO 3: Pattern globale
-        print("    🎯 METODO 3: Pattern globale")
-        all_spans = tree.xpath("//span")
-        quotes = []
-        
-        for span in all_spans:
-            text = span.text_content().strip()
-            parsed = parse_odd(text)
-            
-            if parsed and 1.0 <= parsed <= 50.0:
-                quotes.append(parsed)
-                if len(quotes) == 3:
-                    break
-        
-        if len(quotes) >= 3:
-            quote1, quotex, quote2 = quotes[0], quotes[1], quotes[2]
-            print(f"    1️⃣  Quota 1 (globale): {quote1}")
-            print(f"    ❌ Quota X (globale): {quotex}")
-            print(f"    2️⃣  Quota 2 (globale): {quote2}")
-            return quote1, quotex, quote2
-        
-        print("    ❌ NESSUN METODO HA TROVATO LE QUOTE")
-    
-    except Exception as e:
-        print(f"    ❌ Errore extract_odds: {e}")
-        traceback.print_exc()
-    
-    return None, None, None
 
 def extract_match_info(tree):
     """Estrae data, ora e stato della partita"""
@@ -632,17 +460,8 @@ def main():
         data_match, ora, stato = extract_match_info(tree)
         goalcasa, goaltrasferta = extract_goals(tree, stato)
         
-        quote1, quotex, quote2 = None, None, None
-        if stato == 'NG':
-            quote1, quotex, quote2 = extract_odds(tree)
-            if not all([quote1, quotex, quote2]):
-                print(f"    ⚠️  Quote non disponibili, SKIP")
-                error_count += 1
-                continue
-        
-        # === PREPARA DATI ===
         match_data = {
-            'id': match_id,  # ← ORA È DEFINITO
+            'id': match_id,
             'giornata': giornata,
             'casa': squadra_casa,
             'trasferta': squadra_trasferta,
@@ -653,13 +472,6 @@ def main():
             'gtrasferta': goaltrasferta,
             'href': href
         }
-        
-        if quote1 and quotex and quote2:
-            match_data.update({
-                'quota1': quote1,
-                'quotax': quotex,
-                'quota2': quote2
-            })
         
         # === SALVA SU SUPABASE ===
         if insert_or_update_match(supabase, match_data):
@@ -686,6 +498,7 @@ if __name__ == "__main__":
         print(f"\n❌ ERRORE FATALE: {e}")
         traceback.print_exc()
         sys.exit(1)
+
 
 
 
