@@ -443,10 +443,78 @@ def delete_schedina(user_id, match_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+    # Aggiungi questi endpoint in server.py
+
+# ===== ROSA (LETTURA) =====
+@app.route('/api/rosa/<int:user_id>', methods=['GET'])
+@require_api_key
+def get_user_rosa(user_id):
+    """Recupera la rosa dell'utente"""
+    try:
+        rosa = db_reader.get_user_rosa(user_id)
+        return jsonify({
+            'success': True,
+            'data': rosa,
+            'count': len(rosa)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ===== GIOCATORI DISPONIBILI (ESCLUDE ROSA UTENTE) =====
+@app.route('/api/giocatori/disponibili/<int:user_id>', methods=['GET'])
+@require_api_key
+def get_giocatori_disponibili_utente(user_id):
+    """Recupera tutti i giocatori disponibili per l'acquisto (esclusi quelli già nella rosa)"""
+    try:
+        giocatori = db_reader.get_available_players(user_id)
+        return jsonify({
+            'success': True,
+            'data': giocatori,
+            'count': len(giocatori)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ===== ACQUISTO GIOCATORE (SCRITTURA) =====
+@app.route('/api/rosa/acquista', methods=['POST'])
+@require_api_key
+def acquista_giocatore():
+    """Acquista un giocatore e lo aggiunge alla rosa"""
+    try:
+        data = request.get_json()
+        
+        # Validazione campi obbligatori
+        if not data.get('user_id') or not data.get('player_id') or not data.get('prezzo'):
+            return jsonify({
+                'success': False,
+                'error': 'user_id, player_id e prezzo obbligatori'
+            }), 400
+        
+        success = db_writer.buy_player(
+            data['user_id'],
+            data['player_id'],
+            data['prezzo']
+        )
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Giocatore acquistato con successo'
+            }), 201
+        
+        return jsonify({
+            'success': False, 
+            'error': 'Errore acquisto giocatore'
+        }), 500
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
 
 
 
