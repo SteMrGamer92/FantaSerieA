@@ -358,3 +358,46 @@ class DatabaseWriter:
         except Exception as e:
             print(f"Errore delete_schedina: {e}")
             return False
+
+    def buy_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
+        """
+        Registra l'acquisto di un giocatore nella tabella Rosa
+        
+        Args:
+            user_id: ID dell'utente
+            player_id: ID del giocatore
+            prezzo: Prezzo di acquisto
+        
+        Returns:
+            True se acquisto riuscito, False altrimenti
+        """
+        try:
+            if not self.client:
+                return False
+            
+            # Verifica che il giocatore non sia già nella rosa
+            existing = self.client.table('Rosa').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            
+            if existing.data and len(existing.data) > 0:
+                print(f"⚠️ Giocatore {player_id} già nella rosa dell'utente {user_id}")
+                return False
+            
+            # Inserisci nella tabella Rosa
+            insert_data = {
+                'IDutente': user_id,
+                'IDgiocatore': player_id,
+                'prezzo': prezzo
+            }
+            
+            response = self.client.table('Rosa').insert(insert_data).execute()
+            
+            if response.data:
+                print(f"✅ Giocatore {player_id} acquistato dall'utente {user_id} per €{prezzo}")
+                return True
+            else:
+                print(f"⚠️ Errore inserimento giocatore {player_id} nella rosa")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Errore buy_player: {e}")
+            return False
