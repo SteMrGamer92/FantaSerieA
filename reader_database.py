@@ -222,3 +222,24 @@ class DatabaseReader:
         except Exception as e:
             print(f"Errore get_user_schedine: {e}")
             return []
+
+    def get_available_players(self) -> List[Dict[str, Any]]:
+        """
+        Recupera tutti i giocatori disponibili per l'acquisto
+        con nome breve, squadra, goal, assist e prezzo
+        """
+        try:
+            response = self.client.table('Giocatori').select(
+                'id, nomebreve, squadra, goal, assist, prezzo'
+            ).execute()
+            
+            if response.data:
+                # Imposta prezzo a 1 se non presente
+                for player in response.data:
+                    if player.get('prezzo') is None:
+                        player['prezzo'] = 1.0
+                return response.data
+            return []
+        except Exception as e:
+            print(f"Errore get_available_players: {e}")
+            return []
