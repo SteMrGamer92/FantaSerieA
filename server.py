@@ -211,6 +211,21 @@ def add_giocatore_squadra(team_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+@app.route('/api/giocatori/disponibili', methods=['GET'])
+@require_api_key
+def get_giocatori_disponibili():
+    """Recupera tutti i giocatori disponibili per l'acquisto"""
+    try:
+        giocatori = db_reader.get_available_players()
+        return jsonify({
+            'success': True,
+            'data': giocatori,
+            'count': len(giocatori)
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ===== SCRITTURA - SCOMMESSE =====
 @app.route('/api/scommesse', methods=['POST'])
 @require_api_key
@@ -432,6 +447,7 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
 
 
 
