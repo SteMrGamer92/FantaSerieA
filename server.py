@@ -443,8 +443,6 @@ def delete_schedina(user_id, match_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-    # Aggiungi questi endpoint in server.py
-
 # ===== ROSA (LETTURA) =====
 @app.route('/api/rosa/<int:user_id>', methods=['GET'])
 @require_api_key
@@ -514,6 +512,7 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
 
 
 
