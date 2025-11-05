@@ -376,7 +376,7 @@ class DatabaseWriter:
                 return False
             
             # Verifica che il giocatore non sia già nella rosa
-            existing = self.client.table('Rosa').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            existing = self.client.table('Rose').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
             
             if existing.data and len(existing.data) > 0:
                 print(f"⚠️ Giocatore {player_id} già nella rosa dell'utente {user_id}")
