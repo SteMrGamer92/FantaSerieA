@@ -297,7 +297,7 @@ class DatabaseReader:
         """
         try:
             # 1. Prendi tutti i giocatori dell'utente dalla tabella Rosa
-            rosa_response = self.client.table('Rosa').select(
+            rosa_response = self.client.table('Rose').select(
                 'IDgiocatore, prezzo'
             ).eq('IDutente', user_id).execute()
             
