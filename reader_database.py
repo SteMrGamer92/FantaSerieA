@@ -230,7 +230,7 @@ class DatabaseReader:
         """
         try:
             response = self.client.table('Giocatori').select(
-                'id, nomebreve, squadra, goal, assist, prezzo'
+                'id, nome, squadra, goal, assist, prezzo'
             ).execute()
             
             if response.data:
