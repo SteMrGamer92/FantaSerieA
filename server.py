@@ -378,6 +378,27 @@ def login_user():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/utenti/<int:user_id>/crediti', methods=['GET'])
+@require_api_key
+def get_user_credits(user_id):
+    """Recupera i crediti di un utente"""
+    try:
+        crediti = db_reader.get_user_credits(user_id)
+        
+        if crediti is not None:
+            return jsonify({
+                'success': True,
+                'data': {'crediti': crediti}
+            })
+        
+        return jsonify({
+            'success': False, 
+            'error': 'Utente non trovato'
+        }), 404
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ===== CLASSIFICA =====
 @app.route('/api/classifica', methods=['GET'])
 @require_api_key
@@ -512,6 +533,7 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
 
 
 
