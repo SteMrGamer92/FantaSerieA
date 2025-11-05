@@ -362,6 +362,7 @@ class DatabaseWriter:
     def buy_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
         """
         Registra l'acquisto di un giocatore nella tabella Rosa
+        E sottrae il prezzo dai crediti dell'utente
         
         Args:
             user_id: ID dell'utente
@@ -375,28 +376,55 @@ class DatabaseWriter:
             if not self.client:
                 return False
             
-            # Verifica che il giocatore non sia già nella rosa
-            existing = self.client.table('Rose').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            # 1. Verifica crediti sufficienti
+            user_response = self.client.table('Utenti').select('crediti').eq('id', user_id).single().execute()
+            
+            if not user_response.data:
+                print(f"⚠️ Utente {user_id} non trovato")
+                return False
+            
+            crediti_attuali = user_response.data.get('crediti', 0) or 0
+            
+            if crediti_attuali < prezzo:
+                print(f"⚠️ Crediti insufficienti: {crediti_attuali} < {prezzo}")
+                return False
+            
+            # 2. Verifica che il giocatore non sia già nella rosa
+            existing = self.client.table('Rosa').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
             
             if existing.data and len(existing.data) > 0:
                 print(f"⚠️ Giocatore {player_id} già nella rosa dell'utente {user_id}")
                 return False
             
-            # Inserisci nella tabella Rosa
+            # 3. Inserisci nella tabella Rosa
             insert_data = {
                 'IDutente': user_id,
                 'IDgiocatore': player_id,
                 'prezzo': prezzo
             }
             
-            response = self.client.table('Rosa').insert(insert_data).execute()
+            rosa_response = self.client.table('Rosa').insert(insert_data).execute()
             
-            if response.data:
-                print(f"✅ Giocatore {player_id} acquistato dall'utente {user_id} per €{prezzo}")
-                return True
-            else:
+            if not rosa_response.data:
                 print(f"⚠️ Errore inserimento giocatore {player_id} nella rosa")
                 return False
+            
+            # 4. Sottrai crediti
+            nuovi_crediti = crediti_attuali - prezzo
+            
+            credits_response = self.client.table('Utenti').update({
+                'crediti': nuovi_crediti
+            }).eq('id', user_id).execute()
+            
+            if not credits_response.data:
+                print(f"⚠️ Errore aggiornamento crediti")
+                # Rollback: rimuovi il giocatore dalla rosa
+                self.client.table('Rosa').delete().eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+                return False
+            
+            print(f"✅ Giocatore {player_id} acquistato dall'utente {user_id} per €{prezzo}")
+            print(f"💰 Crediti aggiornati: {crediti_attuali} → {nuovi_crediti}")
+            return True
                 
         except Exception as e:
             print(f"❌ Errore buy_player: {e}")
