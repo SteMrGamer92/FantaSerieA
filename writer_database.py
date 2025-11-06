@@ -361,7 +361,7 @@ class DatabaseWriter:
 
     def buy_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
         """
-        Registra l'acquisto di un giocatore nella tabella Rosa
+        Registra l'acquisto di un giocatore nella tabella Rose
         E sottrae il prezzo dai crediti dell'utente
         
         Args:
@@ -390,20 +390,20 @@ class DatabaseWriter:
                 return False
             
             # 2. Verifica che il giocatore non sia già nella rosa
-            existing = self.client.table('Rosa').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            existing = self.client.table('Rose').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
             
             if existing.data and len(existing.data) > 0:
                 print(f"⚠️ Giocatore {player_id} già nella rosa dell'utente {user_id}")
                 return False
             
-            # 3. Inserisci nella tabella Rosa
+            # 3. Inserisci nella tabella Rose
             insert_data = {
                 'IDutente': user_id,
                 'IDgiocatore': player_id,
                 'prezzo': prezzo
             }
             
-            rosa_response = self.client.table('Rosa').insert(insert_data).execute()
+            rosa_response = self.client.table('Rose').insert(insert_data).execute()
             
             if not rosa_response.data:
                 print(f"⚠️ Errore inserimento giocatore {player_id} nella rosa")
@@ -419,7 +419,7 @@ class DatabaseWriter:
             if not credits_response.data:
                 print(f"⚠️ Errore aggiornamento crediti")
                 # Rollback: rimuovi il giocatore dalla rosa
-                self.client.table('Rosa').delete().eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+                self.client.table('Rose').delete().eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
                 return False
             
             print(f"✅ Giocatore {player_id} acquistato dall'utente {user_id} per €{prezzo}")
