@@ -223,41 +223,10 @@ class DatabaseReader:
             print(f"Errore get_user_schedine: {e}")
             return []
 
-    def get_available_players(self) -> List[Dict[str, Any]]:
-        """
-        Recupera tutti i giocatori disponibili per l'acquisto
-        con nome breve, squadra, goal, assist e prezzo
-        """
-        try:
-            response = self.client.table('Giocatori').select(
-                'id, nome, squadra, goal, assist, prezzo'
-            ).execute()
-            
-            if response.data:
-                # Imposta prezzo a 1 se non presente
-                for player in response.data:
-                    if player.get('prezzo') is None:
-                        player['prezzo'] = 1.0
-                return response.data
-            return []
-        except Exception as e:
-            print(f"Errore get_available_players: {e}")
-            return []
-
     def get_available_players(self, user_id: int) -> List[Dict[str, Any]]:
-        """
-        Recupera tutti i giocatori disponibili per l'acquisto
-        ESCLUSI quelli già posseduti dall'utente
-        
-        Args:
-            user_id: ID dell'utente
-        
-        Returns:
-            Lista giocatori disponibili
-        """
         try:
             # 1. Prendi tutti i giocatori posseduti dall'utente
-            rosa_response = self.client.table('Rosa').select('IDgiocatore').eq('IDutente', user_id).execute()
+            rosa_response = self.client.table('Rose').select('IDgiocatore').eq('IDutente', user_id).execute()
             
             owned_ids = []
             if rosa_response.data:
@@ -284,6 +253,7 @@ class DatabaseReader:
         except Exception as e:
             print(f"Errore get_available_players: {e}")
             return []
+
     
     def get_user_rosa(self, user_id: int) -> List[Dict[str, Any]]:
         """
@@ -296,7 +266,7 @@ class DatabaseReader:
             Lista giocatori nella rosa con dettagli completi
         """
         try:
-            # 1. Prendi tutti i giocatori dell'utente dalla tabella Rosa
+            # 1. Prendi tutti i giocatori dell'utente dalla tabella Rose
             rosa_response = self.client.table('Rose').select(
                 'IDgiocatore, prezzo'
             ).eq('IDutente', user_id).execute()
