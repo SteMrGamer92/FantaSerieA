@@ -234,7 +234,7 @@ class DatabaseReader:
             
             # 2. Prendi tutti i giocatori
             query = self.client.table('Giocatori').select(
-                'id, nomebreve, squadra, goal, assist, prezzo'
+                'id, nome, squadra, goal, assist, prezzo'
             )
             
             # 3. Escludi quelli già posseduti
