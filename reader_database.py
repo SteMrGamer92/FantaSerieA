@@ -279,7 +279,7 @@ class DatabaseReader:
             
             # 3. Prendi i dettagli completi dei giocatori
             players_response = self.client.table('Giocatori').select(
-                'id, nomebreve, squadra, goal, assist, ruolo'
+                'id, nome, squadra, goal, assist, ruolo'
             ).in_('id', player_ids).execute()
             
             if not players_response.data:
