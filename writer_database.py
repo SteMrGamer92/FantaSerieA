@@ -429,3 +429,74 @@ class DatabaseWriter:
         except Exception as e:
             print(f"❌ Errore buy_player: {e}")
             return False
+
+    def sell_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
+        """
+        Vende un giocatore dalla tabella Rose
+        E aggiunge il prezzo ai crediti dell'utente
+        
+        Args:
+            user_id: ID dell'utente
+            player_id: ID del giocatore
+            prezzo: Prezzo di vendita (prezzo di acquisto)
+        
+        Returns:
+            True se vendita riuscita, False altrimenti
+        """
+        try:
+            if not self.client:
+                return False
+            
+            # 1. Verifica che il giocatore sia nella rosa
+            existing = self.client.table('Rose').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            
+            if not existing.data or len(existing.data) == 0:
+                print(f"⚠️ Giocatore {player_id} non trovato nella rosa dell'utente {user_id}")
+                return False
+            
+            # 2. Elimina dalla tabella Rose
+            delete_response = self.client.table('Rose').delete().eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            
+            if not delete_response.data:
+                print(f"⚠️ Errore eliminazione giocatore {player_id} dalla rosa")
+                return False
+            
+            # 3. Recupera crediti attuali
+            user_response = self.client.table('Utenti').select('crediti').eq('id', user_id).single().execute()
+            
+            if not user_response.data:
+                print(f"⚠️ Utente {user_id} non trovato")
+                # Rollback: reinserisci il giocatore
+                self.client.table('Rose').insert({
+                    'IDutente': user_id,
+                    'IDgiocatore': player_id,
+                    'prezzo': prezzo
+                }).execute()
+                return False
+            
+            crediti_attuali = user_response.data.get('crediti', 0) or 0
+            
+            # 4. Aggiungi crediti
+            nuovi_crediti = crediti_attuali + prezzo
+            
+            credits_response = self.client.table('Utenti').update({
+                'crediti': nuovi_crediti
+            }).eq('id', user_id).execute()
+            
+            if not credits_response.data:
+                print(f"⚠️ Errore aggiornamento crediti")
+                # Rollback: reinserisci il giocatore
+                self.client.table('Rose').insert({
+                    'IDutente': user_id,
+                    'IDgiocatore': player_id,
+                    'prezzo': prezzo
+                }).execute()
+                return False
+            
+            print(f"✅ Giocatore {player_id} venduto dall'utente {user_id} per €{prezzo}")
+            print(f"💰 Crediti aggiornati: {crediti_attuali} → {nuovi_crediti}")
+            return True
+                
+        except Exception as e:
+            print(f"❌ Errore sell_player: {e}")
+            return False
