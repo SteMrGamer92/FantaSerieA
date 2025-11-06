@@ -479,6 +479,40 @@ def get_user_rosa(user_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/rosa/vendi', methods=['POST'])
+@require_api_key
+def vendi_giocatore():
+    """Vende un giocatore e lo rimuove dalla rosa"""
+    try:
+        data = request.get_json()
+        
+        # Validazione campi obbligatori
+        if not data.get('user_id') or not data.get('player_id') or not data.get('prezzo'):
+            return jsonify({
+                'success': False,
+                'error': 'user_id, player_id e prezzo obbligatori'
+            }), 400
+        
+        success = db_writer.sell_player(
+            data['user_id'],
+            data['player_id'],
+            data['prezzo']
+        )
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Giocatore venduto con successo'
+            }), 200
+        
+        return jsonify({
+            'success': False, 
+            'error': 'Errore vendita giocatore'
+        }), 500
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ===== GIOCATORI DISPONIBILI (ESCLUDE ROSA UTENTE) =====
 @app.route('/api/giocatori/disponibili/<int:user_id>', methods=['GET'])
 @require_api_key
@@ -533,6 +567,7 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
     
+
 
 
 
