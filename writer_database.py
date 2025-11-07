@@ -281,7 +281,7 @@ class DatabaseWriter:
             print(f"Errore settle_bet: {e}")
             return False
     
-    def update_team_budget(self, team_id: int, new_budget: float) -> bool:
+    def update_team_budget(self, team_id: int, new_budget: int) -> bool:
         """
         Aggiorna il budget di una squadra
         """
