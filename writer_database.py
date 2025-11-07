@@ -359,7 +359,7 @@ class DatabaseWriter:
             print(f"Errore delete_schedina: {e}")
             return False
 
-    def buy_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
+    def buy_player(self, user_id: int, player_id: int, prezzo: int) -> bool:
         """
         Registra l'acquisto di un giocatore nella tabella Rose
         E sottrae il prezzo dai crediti dell'utente
@@ -390,7 +390,7 @@ class DatabaseWriter:
                 return False
             
             # 2. Verifica che il giocatore non sia già nella rosa
-            existing = self.client.table('Rose').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            existing = self.client.table('Rose').select('IDgiocatore').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
             
             if existing.data and len(existing.data) > 0:
                 print(f"⚠️ Giocatore {player_id} già nella rosa dell'utente {user_id}")
@@ -430,7 +430,7 @@ class DatabaseWriter:
             print(f"❌ Errore buy_player: {e}")
             return False
     
-    def sell_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
+    def sell_player(self, user_id: int, player_id: int, prezzo: int) -> bool:
         """
         Vende un giocatore dalla tabella Rose
         E aggiunge il prezzo ai crediti dell'utente
@@ -448,7 +448,7 @@ class DatabaseWriter:
                 return False
             
             # 1. Verifica che il giocatore sia nella rosa
-            existing = self.client.table('Rose').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            existing = self.client.table('Rose').select('IDgiocatore').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
             
             if not existing.data or len(existing.data) == 0:
                 print(f"⚠️ Giocatore {player_id} non trovato nella rosa dell'utente {user_id}")
