@@ -359,7 +359,7 @@ class DatabaseWriter:
             print(f"Errore delete_schedina: {e}")
             return False
 
-    def buy_player(self, user_id: int, player_id: int, prezzo: int) -> bool:
+    def buy_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
         """
         Registra l'acquisto di un giocatore nella tabella Rose
         E sottrae il prezzo dai crediti dell'utente
@@ -390,7 +390,7 @@ class DatabaseWriter:
                 return False
             
             # 2. Verifica che il giocatore non sia già nella rosa
-            existing = self.client.table('Rose').select('IDgiocatore').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            existing = self.client.table('Rose').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
             
             if existing.data and len(existing.data) > 0:
                 print(f"⚠️ Giocatore {player_id} già nella rosa dell'utente {user_id}")
@@ -409,11 +409,11 @@ class DatabaseWriter:
                 print(f"⚠️ Errore inserimento giocatore {player_id} nella rosa")
                 return False
             
-            # 4. Sottrai crediti
-            nuovi_crediti = crediti_attuali - prezzo
+            # 4. Sottrai crediti (CONVERTI IN INT)
+            nuovi_crediti = int(crediti_attuali - prezzo)  # ← FIX: Converti in int
             
             credits_response = self.client.table('Utenti').update({
-                'crediti': nuovi_crediti
+                'crediti': nuovi_crediti  # Ora è int, non float
             }).eq('id', user_id).execute()
             
             if not credits_response.data:
@@ -429,8 +429,8 @@ class DatabaseWriter:
         except Exception as e:
             print(f"❌ Errore buy_player: {e}")
             return False
-
-    def sell_player(self, user_id: int, player_id: int, prezzo: int) -> bool:
+    
+    def sell_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
         """
         Vende un giocatore dalla tabella Rose
         E aggiunge il prezzo ai crediti dell'utente
@@ -448,7 +448,7 @@ class DatabaseWriter:
                 return False
             
             # 1. Verifica che il giocatore sia nella rosa
-            existing = self.client.table('Rose').select('IDgiocatore').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
+            existing = self.client.table('Rose').select('id').eq('IDutente', user_id).eq('IDgiocatore', player_id).execute()
             
             if not existing.data or len(existing.data) == 0:
                 print(f"⚠️ Giocatore {player_id} non trovato nella rosa dell'utente {user_id}")
@@ -476,11 +476,11 @@ class DatabaseWriter:
             
             crediti_attuali = user_response.data.get('crediti', 0) or 0
             
-            # 4. Aggiungi crediti
-            nuovi_crediti = crediti_attuali + prezzo
+            # 4. Aggiungi crediti (CONVERTI IN INT)
+            nuovi_crediti = int(crediti_attuali + prezzo)  # ← FIX: Converti in int
             
             credits_response = self.client.table('Utenti').update({
-                'crediti': nuovi_crediti
+                'crediti': nuovi_crediti  # Ora è int, non float
             }).eq('id', user_id).execute()
             
             if not credits_response.data:
@@ -500,3 +500,4 @@ class DatabaseWriter:
         except Exception as e:
             print(f"❌ Errore sell_player: {e}")
             return False
+
