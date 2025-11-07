@@ -359,7 +359,7 @@ class DatabaseWriter:
             print(f"Errore delete_schedina: {e}")
             return False
 
-    def buy_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
+    def buy_player(self, user_id: int, player_id: int, prezzo: int) -> bool:
         """
         Registra l'acquisto di un giocatore nella tabella Rose
         E sottrae il prezzo dai crediti dell'utente
@@ -430,7 +430,7 @@ class DatabaseWriter:
             print(f"❌ Errore buy_player: {e}")
             return False
 
-    def sell_player(self, user_id: int, player_id: int, prezzo: float) -> bool:
+    def sell_player(self, user_id: int, player_id: int, prezzo: int) -> bool:
         """
         Vende un giocatore dalla tabella Rose
         E aggiunge il prezzo ai crediti dell'utente
