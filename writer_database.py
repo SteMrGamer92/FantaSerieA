@@ -558,3 +558,54 @@ class DatabaseWriter:
             print(f"❌ Errore convert_currency: {e}")
             return False
 
+    def save_formazione(self, user_id: int, giornata: int, formazione: Dict[str, Any]) -> bool:
+        """
+        Salva la formazione di un utente per una giornata specifica
+        
+        Args:
+            user_id: ID dell'utente
+            giornata: Numero della giornata
+            formazione: Dict con struttura {'titolari': {...}, 'panchina': {...}}
+        
+        Returns:
+            True se salvataggio riuscito, False altrimenti
+        """
+        try:
+            if not self.client:
+                return False
+            
+            # 1. Elimina formazione esistente per questa giornata
+            self.client.table('Formazioni').delete().eq('IDutente', user_id).eq('giornata', giornata).execute()
+            
+            # 2. Prepara i dati da inserire
+            rows_to_insert = []
+            
+            for categoria in ['titolari', 'panchina']:
+                for ruolo, giocatori in formazione[categoria].items():
+                    for idx, giocatore in enumerate(giocatori):
+                        if giocatore:  # Solo se c'è un giocatore assegnato
+                            rows_to_insert.append({
+                                'IDutente': user_id,
+                                'IDgiocatore': giocatore.get('id'),
+                                'giornata': giornata,
+                                'posizione': f'{categoria}_{ruolo}_{idx}'
+                            })
+            
+            # 3. Inserisci tutti i giocatori
+            if rows_to_insert:
+                response = self.client.table('Formazioni').insert(rows_to_insert).execute()
+                
+                if response.data:
+                    print(f"✅ Formazione salvata: {len(rows_to_insert)} giocatori per giornata {giornata}")
+                    return True
+                else:
+                    print(f"⚠️ Errore inserimento formazione")
+                    return False
+            else:
+                print(f"⚠️ Nessun giocatore da salvare")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Errore save_formazione: {e}")
+            return False
+
