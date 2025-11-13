@@ -629,7 +629,61 @@ def convert_currency():
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ===== FORMAZIONE - LETTURA =====
+@app.route('/api/formazione/<int:user_id>/<int:giornata>', methods=['GET'])
+@require_api_key
+def get_formazione(user_id, giornata):
+    """Recupera la formazione di un utente per una giornata"""
+    try:
+        formazione = db_reader.get_user_formazione(user_id, giornata)
+        
+        return jsonify({
+            'success': True,
+            'data': formazione,
+            'count': len(formazione)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ===== FORMAZIONE - SALVATAGGIO =====
+@app.route('/api/formazione', methods=['POST'])
+@require_api_key
+def save_formazione():
+    """Salva la formazione di un utente per una giornata"""
+    try:
+        data = request.get_json()
+        
+        # Validazione campi obbligatori
+        if not data.get('user_id') or not data.get('giornata') or not data.get('formazione'):
+            return jsonify({
+                'success': False,
+                'error': 'user_id, giornata e formazione obbligatori'
+            }), 400
+        
+        user_id = data['user_id']
+        giornata = data['giornata']
+        formazione = data['formazione']
+        
+        # Salva formazione
+        success = db_writer.save_formazione(user_id, giornata, formazione)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Formazione salvata per giornata {giornata}'
+            }), 200
+        
+        return jsonify({
+            'success': False, 
+            'error': 'Errore salvataggio formazione'
+        }), 500
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
     
+
 
 
 
