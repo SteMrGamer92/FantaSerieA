@@ -377,28 +377,7 @@ def login_user():
         return jsonify({'success': False, 'error': 'Credenziali non valide'}), 401
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-@app.route('/api/utenti/<int:user_id>/crediti', methods=['GET'])
-@require_api_key
-def get_user_credits(user_id):
-    """Recupera i crediti di un utente"""
-    try:
-        crediti = db_reader.get_user_credits(user_id)
         
-        if crediti is not None:
-            return jsonify({
-                'success': True,
-                'data': {'crediti': crediti}
-            })
-        
-        return jsonify({
-            'success': False, 
-            'error': 'Utente non trovato'
-        }), 404
-        
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
 # ===== CLASSIFICA =====
 @app.route('/api/classifica', methods=['GET'])
 @require_api_key
@@ -566,7 +545,92 @@ def acquista_giocatore():
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)
+
+# ===== VALUTE - LETTURA =====
+@app.route('/api/utenti/<int:user_id>/currencies', methods=['GET'])
+@require_api_key
+def get_user_currencies(user_id):
+    """Recupera crediti e crediti_scommesse di un utente"""
+    try:
+        currencies = db_reader.get_user_currencies(user_id)
+        
+        if currencies is not None:
+            return jsonify({
+                'success': True,
+                'data': currencies
+            })
+        
+        return jsonify({
+            'success': False, 
+            'error': 'Utente non trovato'
+        }), 404
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ===== VALUTE - CONVERSIONE =====
+@app.route('/api/valute/converti', methods=['POST'])
+@require_api_key
+def convert_currency():
+    """Converte valute tra Crediti e C.Scommesse"""
+    try:
+        data = request.get_json()
+        
+        # Validazione campi obbligatori
+        if not data.get('user_id') or not data.get('direction') or not data.get('amount'):
+            return jsonify({
+                'success': False,
+                'error': 'user_id, direction e amount obbligatori'
+            }), 400
+        
+        user_id = data['user_id']
+        direction = data['direction']
+        amount = data['amount']
+        
+        # Validazione direzione
+        if direction not in ['credits_to_bets', 'bets_to_credits']:
+            return jsonify({
+                'success': False,
+                'error': 'direction deve essere credits_to_bets o bets_to_credits'
+            }), 400
+        
+        # Validazione amount
+        try:
+            amount = int(amount)
+            if amount <= 0:
+                raise ValueError("Amount deve essere positivo")
+        except (ValueError, TypeError):
+            return jsonify({
+                'success': False,
+                'error': 'amount deve essere un numero intero positivo'
+            }), 400
+        
+        # Esegui conversione
+        success = db_writer.convert_currency(user_id, direction, amount)
+        
+        if success:
+            # Prepara messaggio di successo
+            if direction == 'credits_to_bets':
+                converted = amount / 10.0
+                message = f'Convertiti €{amount} in {converted:.1f} C.Scommesse'
+            else:
+                converted = amount * 10
+                message = f'Convertiti {amount} C.Scommesse in €{converted}'
+            
+            return jsonify({
+                'success': True,
+                'message': message
+            }), 200
+        
+        return jsonify({
+            'success': False, 
+            'error': 'Saldo insufficiente o errore conversione'
+        }), 400
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
     
+
 
 
 
