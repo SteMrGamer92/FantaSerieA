@@ -501,3 +501,60 @@ class DatabaseWriter:
             print(f"❌ Errore sell_player: {e}")
             return False
 
+    def convert_currency(self, user_id: int, direction: str, amount: int) -> bool:
+        try:
+            if not self.client:
+                return False
+            
+            # 1. Recupera saldi attuali
+            user_response = self.client.table('Utenti').select('crediti, crediti_scommesse').eq('id', user_id).single().execute()
+            
+            if not user_response.data:
+                print(f"⚠️ Utente {user_id} non trovato")
+                return False
+            
+            crediti_attuali = user_response.data.get('crediti', 0) or 0
+            crediti_scommesse_attuali = user_response.data.get('crediti_scommesse', 0) or 0
+            
+            # 2. Calcola nuovi saldi in base alla direzione
+            if direction == 'credits_to_bets':
+                # Crediti → C.Scommesse (10:1)
+                if crediti_attuali < amount:
+                    print(f"⚠️ Crediti insufficienti: {crediti_attuali} < {amount}")
+                    return False
+                
+                nuovi_crediti = int(crediti_attuali - amount)
+                nuovi_crediti_scommesse = float(crediti_scommesse_attuali + (amount / 10.0))
+            
+            elif direction == 'bets_to_credits':
+                # C.Scommesse → Crediti (1:10)
+                if crediti_scommesse_attuali < amount:
+                    print(f"⚠️ C.Scommesse insufficienti: {crediti_scommesse_attuali} < {amount}")
+                    return False
+                
+                nuovi_crediti = int(crediti_attuali + (amount * 10))
+                nuovi_crediti_scommesse = float(crediti_scommesse_attuali - amount)
+            
+            else:
+                print(f"❌ Direzione non valida: {direction}")
+                return False
+            
+            # 3. Aggiorna il database
+            update_response = self.client.table('Utenti').update({
+                'crediti': nuovi_crediti,
+                'crediti_scommesse': nuovi_crediti_scommesse
+            }).eq('id', user_id).execute()
+            
+            if not update_response.data:
+                print(f"⚠️ Errore aggiornamento saldi")
+                return False
+            
+            print(f"✅ Conversione completata per utente {user_id}")
+            print(f"💰 Crediti: {crediti_attuali} → {nuovi_crediti}")
+            print(f"🎲 C.Scommesse: {crediti_scommesse_attuali} → {nuovi_crediti_scommesse}")
+            return True
+                
+        except Exception as e:
+            print(f"❌ Errore convert_currency: {e}")
+            return False
+
