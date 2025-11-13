@@ -298,23 +298,16 @@ class DatabaseReader:
             print(f"Errore get_user_rosa: {e}")
             return []
 
-    def get_user_credits(self, user_id: int) -> Optional[float]:
-        """
-        Recupera i crediti di un utente dalla tabella Utenti
-        
-        Args:
-            user_id: ID dell'utente
-        
-        Returns:
-            Crediti dell'utente o None se errore
-        """
+    def get_user_currencies(self, user_id: int) -> Optional[Dict[str, float]]:
         try:
-            response = self.client.table('Utenti').select('crediti').eq('id', user_id).single().execute()
+            response = self.client.table('Utenti').select('crediti, crediti_scommesse').eq('id', user_id).single().execute()
             
             if response.data:
-                crediti = response.data.get('crediti', 0)
-                return crediti if crediti is not None else 0.0
-            return 0.0
+                return {
+                    'crediti': response.data.get('crediti', 0) or 0,
+                    'crediti_scommesse': response.data.get('crediti_scommesse', 0) or 0
+                }
+            return None
         except Exception as e:
-            print(f"Errore get_user_credits: {e}")
+            print(f"Errore get_user_currencies: {e}")
             return None
