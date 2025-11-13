@@ -311,3 +311,48 @@ class DatabaseReader:
         except Exception as e:
             print(f"Errore get_user_currencies: {e}")
             return None
+
+    def get_user_formazione(self, user_id: int, giornata: int) -> List[Dict[str, Any]]:
+        """
+        Recupera la formazione di un utente per una giornata specifica
+        
+        Args:
+            user_id: ID dell'utente
+            giornata: Numero della giornata
+        
+        Returns:
+            Lista di dict con {IDgiocatore, posizione, giocatore_info}
+        """
+        try:
+            # Recupera formazione dalla tabella Formazioni
+            response = self.client.table('Formazioni').select(
+                'IDgiocatore, posizione'
+            ).eq('IDutente', user_id).eq('giornata', giornata).execute()
+            
+            if not response.data:
+                return []
+            
+            # Per ogni giocatore, recupera i dettagli completi
+            result = []
+            for row in response.data:
+                player_id = row['IDgiocatore']
+                posizione = row['posizione']
+                
+                # Prendi dettagli giocatore
+                player_response = self.client.table('Giocatori').select(
+                    'id, nome, squadra, ruolo, goal, assist'
+                ).eq('id', player_id).single().execute()
+                
+                if player_response.data:
+                    result.append({
+                        'IDgiocatore': player_id,
+                        'posizione': posizione,
+                        'giocatore': player_response.data
+                    })
+            
+            print(f"✅ Formazione caricata: {len(result)} giocatori per giornata {giornata}")
+            return result
+            
+        except Exception as e:
+            print(f"Errore get_user_formazione: {e}")
+            return []
