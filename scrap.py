@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from playwright.sync_api import sync_playwright
 from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 from lxml import html
@@ -903,3 +900,4 @@ if __name__ == "__main__":
         traceback.print_exc()
         import sys
         sys.exit(1)
+
