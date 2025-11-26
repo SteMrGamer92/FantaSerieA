@@ -3,6 +3,7 @@ from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 from lxml import html
 from supabase import create_client, Client 
 import time
+import math
 import re
 import json
 import datetime
@@ -12,33 +13,56 @@ import pytz
 
 # ==================== CONFIGURAZIONE GLOBALE ====================
 URL_TORNEO = 'https://www.sofascore.com/it/torneo/calcio/italy/serie-a/23#id:76457#tab:matches'
-TARGET_GIORNATA = 12
-
-BUTTON_GIORNATA_XPATH = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[2]/div[2]/div[2]/div/div/div[1]/div/div/button"
-GIORNATA_LI_SELECTOR_CSS = 'ul.dropdown__list li:has-text("Round {}")'
 CONSENT_BUTTON_SELECTOR = 'button:has-text("Acconsento"), button:has-text("Consent")'
+TARGET_GIORNATA = 4
 
-# XPath Eventi
-XPATH_BASE_EVENTI = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[1]/div[4]/div/div/div[{n}]"
-XPATH_TESTO_1 = "./div/div[2]/div/span[1]"
-XPATH_TESTO_2 = "./div/div[2]/div/span[2]"
+BUTTON_GIORNATA_SELECTOR = 'button.dropdown__button[aria-haspopup="listbox"]:has-text("Round"), button.dropdown__button[aria-haspopup="listbox"]:has-text("Giornata")'
+CONTAINER_GIORNATA_SELECTOR = 'div.card-component.mobile-only'
+MATCH_LINK_SELECTOR = f'{CONTAINER_GIORNATA_SELECTOR} a[data-id][href*="/match/"]'
+SCROLL_CONTAINER_SELECTOR = '.beautiful-scrollbar__content'
 
-# XPath Formazioni
-BASE_FORMAZIONI = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[2]/div[1]/div/div/div/div[2]/div/div/div[2]/div/div/div[1]/div[2]/div/div/div"
-BASE_PANCHINARI = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[4]/div[2]/div[1]/div/div/div/div[2]/div/div/div[2]/div/div/div[2]/div[1]/div/div[3]/div[2]"
+# ==================== SELETTORI CSS ====================
 
-# XPath Info Partita
-XPATH_SQUADRA_CASA = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div/div[1]/div/a/div/div/bdi"
-XPATH_SQUADRA_TRASFERTA = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div/div[3]/div/a/div/div/bdi"
-XPATH_GOAL_CASA = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[1]"
-XPATH_GOAL_TRASFERTA = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[1]/span/span[3]"
-XPATH_STATUS = "/html/body/div[1]/main/div[2]/div/div/div[1]/div[3]/div/div[2]/div/div[1]/div[2]/div/div/div[2]/div/span/span"
+# Info Partita Base
+SELECTOR_SQUADRA_CASA = 'div[style*="left: 0px"] bdi.textStyle_display\\.medium'
+SELECTOR_SQUADRA_TRASFERTA = 'div[style*="right: 0px"] bdi.textStyle_display\\.medium'
+SELECTOR_GOAL_CASA = 'span.textStyle_display\\.extraLarge'  # Primo elemento
+SELECTOR_GOAL_TRASFERTA = 'span.textStyle_display\\.extraLarge'  # Secondo elemento
+SELECTOR_STATUS = 'div.card-component span[class*="textStyle"]'
+
+# Moduli
+SELECTOR_MODULO_CASA = 'span.Text.gHLcGU[color="onSurface.nLv1"]'  # Primo
+SELECTOR_MODULO_TRASFERTA = 'span.Text.gHLcGU[color="onSurface.nLv1"]'  # Secondo
+
+# Eventi
+SELECTOR_EVENTI_CONTAINER = 'div.hover\\:bg_surface\\.s2.cursor_pointer'
+SELECTOR_EVENTO_MINUTO = 'span.textStyle_display\\.micro'
+SELECTOR_EVENTO_GIOCATORE = 'span.textStyle_body\\.medium.c_neutrals\\.nLv1.h_lg'
+SELECTOR_EVENTO_TIPO = 'span.textStyle_body\\.medium.c_neutrals\\.nLv3.h_lg'
+SELECTOR_EVENTO_ICONA_GOL = 'svg title:has-text("Gol")'
+SELECTOR_EVENTO_ICONA_GIALLO = 'path[fill*="#D9AF00"]'
+SELECTOR_EVENTO_ICONA_ROSSO = 'path[fill*="error"]'
+SELECTOR_EVENTO_ICONA_SOSTITUZIONE = 'svg path[d*="M12 2C6.48"]'
+
+# Titolari
+SELECTOR_TITOLARI_CONTAINER = 'div.Box.klGMtt.sc-eDPEul.gghSOi'  # Container generale formazioni
+SELECTOR_TITOLARE_NUMERO = 'span[color="onColor.secondary"]'
+SELECTOR_TITOLARE_NOME = 'span.Text.Dodlb span.Box.klGMtt'
+SELECTOR_TITOLARE_VOTO = 'div.Box.klGMtt.sc-eDPEul.gghSOi span'
+
+# Panchinari
+SELECTOR_PANCHINARI_CONTAINER = 'div.Box.Flex.deRHiB.cQgcrM[cursor="pointer"]'
+SELECTOR_PANCHINARO_NUMERO = 'bdi.Box.ewxwAz'
+SELECTOR_PANCHINARO_NOME = 'span.Box.klGMtt'
+SELECTOR_PANCHINARO_VOTO = 'div.Box.klGMtt.sc-eDPEul.pXLBd span'
+SELECTOR_PANCHINARO_MINUTO_ENTRATA = 'span[color="secondary.default"]'
+SELECTOR_PANCHINARO_SOSTITUITO = 'span[color="onSurface.nLv3"]'
                 
 # ===== CONFIGURAZIONE SUPABASE =====
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://ipqxjudlxcqacgtmpkzx.supabase.co')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlwcXhqdWRseGNxYWNndG1wa3p4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTEyNjU3OSwiZXhwIjoyMDc0NzAyNTc5fQ.9nMpSeM-p5PvnF3rwMeR_zzXXocyfzYV24vau3AcDso')
 
-ORA_LEGALE_OFFSET = 1
+ORA_LEGALE_OFFSET = 0
 
 # ==================== UTILITY E SUPABASE ====================
 
@@ -89,21 +113,21 @@ def fetch_giocatori_mapping(supabase: Client):
     
     print("\n🔍 Caricamento mappatura ID Giocatore...")
     try:
-        # Seleziona id, nome (cognome) e nomeint (nome completo)
-        response = supabase.table('Giocatori').select('id, nome, nomeint').execute()
+        response = supabase.table('Giocatori').select('id, nome, nomeint, squadra').execute()
         
         for record in response.data:
             giocatore_id = record.get('id')
+            squadra = record.get('squadra', '').strip()
             
             # Campo "nome" = cognome (per titolari)
             nome_cognome = pulisci_nome(record.get('nome', ''))
             if nome_cognome and giocatore_id is not None:
-                mapping['cognomi'][nome_cognome] = giocatore_id
+                mapping['cognomi'][(nome_cognome, squadra)] = giocatore_id
             
             # Campo "nomeint" = nome completo (per panchinari)
             nome_completo = pulisci_nome(record.get('nomeint', ''))
             if nome_completo and giocatore_id is not None:
-                mapping['nomi_completi'][nome_completo] = giocatore_id
+                mapping['nomi_completi'][(nome_completo, squadra)] = giocatore_id
         
         print(f"✅ Mappatura caricata:")
         print(f"   • {len(mapping['cognomi'])} cognomi (per titolari)")
@@ -121,6 +145,10 @@ def pulisci_nome(nome_grezzo):
     
     # 1. Rimuove numero iniziale e (c)
     cleaned = re.sub(r'^\d+\s*\(?c?\)?\.?\s*', '', nome_grezzo.strip())
+
+    # 2. ✅ RIMUOVE IL SEGNO DI CAPITANO (C) o (c) OVUNQUE SI TROVI
+    # Rimuove (C), (c) o (C.) ovunque nel nome, inclusi spazi multipli
+    cleaned = re.sub(r'\s*\([Cc]\.?\)', '', cleaned)
     
     # 2. ✅ RIMUOVE SOFT HYPHEN (&shy;, &#173;, \u00ad)
     cleaned = cleaned.replace('&shy;', '')
@@ -133,10 +161,16 @@ def pulisci_nome(nome_grezzo):
     
     return cleaned.strip()
 
-def get_current_round(page, button_xpath):
-    """Estrae il numero del round dal bottone"""
+def get_giornata_button_locator(page):
+    """Restituisce il localizzatore esatto per il bottone della Giornata,
+       usando il ruolo e il nome ARIA univoco (Select item in event list)."""
+    return page.get_by_role("combobox", name="Select item in event list")
+
+def get_current_round(page): 
+    """Estrae il numero del round dal bottone."""
     try:
-        text = page.locator(f'xpath={button_xpath}').text_content().strip()
+        locator = get_giornata_button_locator(page) 
+        text = locator.text_content().strip() 
         match = re.search(r'\d+', text)
         return int(match.group()) if match else 'N/A'
     except Exception:
@@ -166,12 +200,13 @@ def get_locator_count(page, xpath_str):
 # ==================== ESTRAZIONE PARTITE ====================
 
 def fetch_giornata_matches(target_giornata):
-    """Scarica la lista delle partite della giornata target"""
+    """Scarica la lista degli href delle partite (10 totali) della giornata target."""
     
     print(f"\n{'='*80}")
     print(f"FASE 1: RECUPERO PARTITE GIORNATA {target_giornata}")
     print(f"{'='*80}")
     
+    # 🛑 Usiamo il blocco 'with' per la gestione automatica della chiusura di Playwright
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -187,7 +222,7 @@ def fetch_giornata_matches(target_giornata):
         page.goto(URL_TORNEO, wait_until='domcontentloaded', timeout=90000)
         time.sleep(4)
         
-        # Gestione cookie
+        # Gestione cookie 
         try:
             page.locator(CONSENT_BUTTON_SELECTOR).click(timeout=5000)
             print("✅ Cookie accettati")
@@ -196,19 +231,41 @@ def fetch_giornata_matches(target_giornata):
         
         time.sleep(1)
         
-        # Verifica giornata attuale
-        current_round = get_current_round(page, BUTTON_GIORNATA_XPATH)
+        # Verifica e cambio giornata
+        current_round = get_current_round(page) 
         print(f"📅 Giornata visualizzata: {current_round}")
         
         if current_round != target_giornata:
             print(f"🔄 Cambio giornata da {current_round} a {target_giornata}...")
             
             try:
-                page.locator(f'xpath={BUTTON_GIORNATA_XPATH}').click(timeout=30000, force=True)
+                # 🛡️ Clicca sul bottone con selettore ARIA robusto
+                giornata_button = get_giornata_button_locator(page)
+                giornata_button.click(timeout=30000, force=True)
                 time.sleep(1)
+
+                # Calcolo scroll
+                try:
+                    giornata_gap = int(current_round) - target_giornata
+                except ValueError:
+                     giornata_gap = 20 - target_giornata 
+                     
+                num_scrolls = max(0, math.ceil(giornata_gap / 7)) 
                 
-                giornata_selector = GIORNATA_LI_SELECTOR_CSS.format(target_giornata)
-                locator_li = page.locator(giornata_selector)
+                if num_scrolls > 0:
+                    print(f"📜 Distanza stimata {giornata_gap} giornate → {num_scrolls} scroll sulla tendina")
+                    # 🟢 Usa il selettore del contenuto scorrevole
+                    dropdown_scroll_container = page.locator(SCROLL_CONTAINER_SELECTOR).first 
+                    
+                    for i in range(num_scrolls):
+                        dropdown_scroll_container.evaluate('el => el.scrollBy(0, 300)') 
+                        time.sleep(0.5)
+                        print(f"   ↓ Scroll {i+1}/{num_scrolls}")
+
+                target_text = f"Round {target_giornata}"
+                # 🛡️ Locator robusto con exact=True
+                locator_li = page.get_by_role("option", name=target_text, exact=True)
+
                 locator_li.scroll_into_view_if_needed(timeout=10000)
                 time.sleep(1)
                 
@@ -218,129 +275,161 @@ def fetch_giornata_matches(target_giornata):
                     print(f"✅ Giornata {target_giornata} selezionata")
                     
                     try:
-                         page.wait_for_function(f"""() => 
-                             document.querySelector("button[aria-haspopup='true']") && 
-                             document.querySelector("button[aria-haspopup='true']").textContent.includes("Round {target_giornata}")
-                         """, timeout=15000)
-                         print("✅ Attesa cambio Round verificata.")
+                        # 🛡️ Verifica cambio Round con selettore CSS :has-text (correzione)
+                        BUTTON_GIORNATA_SELECTOR_STRING = 'button[role="combobox"][aria-haspopup="listbox"]'
+                        page.wait_for_selector(
+                            f'{BUTTON_GIORNATA_SELECTOR_STRING}:has-text("{target_text}")', 
+                            timeout=15000
+                        )
+                        print("✅ Attesa cambio Round verificata.")
                     except PlaywrightTimeoutError:
-                         print("⚠️ Timeout nella verifica del cambio Round. Proseguo...")
+                        print("⚠️ Timeout nella verifica del cambio Round. Proseguo...")
 
-                    time.sleep(4)
+                    time.sleep(7) 
+
                 else:
                     raise Exception("Elemento giornata non trovato")
                     
             except Exception as e:
+                # 🛑 Gestione errori SENZA chiudere il browser manualmente
                 print(f"❌ Errore selezione giornata: {e}")
-                browser.close()
-                return []
+                return [] 
         
-        # Attesa caricamento partite
-        page.wait_for_selector('a[href*="/match/"]', timeout=30000)
-        time.sleep(5)
+        # ---------------------------------------------------------
+        # 🟢 LOGICA DI ESTRAZIONE HREF CON SELETTORE ANCORATO
+        # ---------------------------------------------------------
         
-        # Scroll e download HTML
+        # 1. Attesa che almeno un elemento appaia (usando il selettore ancorato e corretto)
+        try:
+            print("⏳ Attesa apparizione primo link partita...")
+            page.wait_for_selector(MATCH_LINK_SELECTOR, timeout=60000) 
+            page.locator(MATCH_LINK_SELECTOR).first.wait_for(state='visible', timeout=10000)
+            print("✅ Primo link partita apparso.")
+
+        except PlaywrightTimeoutError:
+            print("❌ Timeout: Nessun link partita trovato dopo 60 secondi.")
+            return []
+
+        time.sleep(3) 
+        
+        # Scroll della pagina per caricare eventuali partite lazy-loaded
         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
         time.sleep(3)
-        html_content = page.content()
         
-        browser.close()
-        
-        # Estrazione href partite
-        tree = html.fromstring(html_content)
-        xpath = "//div[contains(@class, 'Box')]//a[contains(@href, '/it/football/match/')]"
-        elements = tree.xpath(xpath)
-        
+        # 2. Localizza TUTTI i link usando il selettore specifico
+        match_locators = page.locator(MATCH_LINK_SELECTOR)
+        num_matches = match_locators.count()
+        print(f"🔗 Trovati {num_matches} link partita usando il selettore ancorato.")
+
         matches = []
-        for element in elements:
-            href = element.get('href', '')
+        for i in range(num_matches):
+            match_locator = match_locators.nth(i)
+            
+            href = match_locator.get_attribute('href')
+            match_id_attr = match_locator.get_attribute('data-id')
+            match_id = int(match_id_attr) if match_id_attr else 'N/A'
+            
             if href:
-                if not href.startswith('https://'):
-                    href = f"https://www.sofascore.com{href}"
-                
-                match_id = re.search(r'#id:(\d+)', href)
-                match_id = int(match_id.group(1)) if match_id else 'N/A'
-                
-                match_name = re.search(r'/match/([^/]+)/', href)
+                full_url = f"https://www.sofascore.com{href}" if not href.startswith('https://') else href
+                match_name = re.search(r'/match/([^/]+)/', full_url)
                 match_name = match_name.group(1) if match_name else f"match_{match_id}"
                 
                 matches.append({
                     'id': match_id,
-                    'url': href,
+                    'url': full_url,
                     'name': match_name
                 })
+
+        # --- Fine Blocco 'with' ---
         
+        # Logica di deduplicazione
         matches_unici = {m['id']: m for m in matches if m['id'] != 'N/A'}
         final_matches = list(matches_unici.values())
         
-        print(f"\n✅ Trovate {len(final_matches)} partite per la giornata {target_giornata}")
+        print(f"\n✅ Trovate {len(final_matches)} partite per la giornata {target_giornata}.")
         for m in final_matches:
-             print(f"   • {m['name']} (ID: {m['id']})")
+            print(f"   • {m['name']} (ID: {m['id']})")
         
         return final_matches
-
 # ==================== ESTRAZIONE DATI PARTITA ====================
 
-def extract_match_basic_info(tree):
-    """Estrae squadre, data, ora, stato e goal"""
+def extract_match_basic_info(page):
+    """
+    Estrae squadre, data, ora, stato e goal usando Playwright locators
     
-    # Squadre
+    Args:
+        page: Oggetto page di Playwright
+    
+    Returns:
+        Dict con info base della partita
+    """
+    
+    # ===== SQUADRE =====
     squadra_casa = None
     squadra_trasferta = None
     
-    casa_elements = tree.xpath(XPATH_SQUADRA_CASA)
-    if casa_elements:
-        squadra_casa = casa_elements[0].text_content().strip()
+    try:
+        casa_locator = page.locator(SELECTOR_SQUADRA_CASA).first
+        if casa_locator.count() > 0:
+            squadra_casa = casa_locator.text_content().strip()
+    except:
+        pass
     
-    trasferta_elements = tree.xpath(XPATH_SQUADRA_TRASFERTA)
-    if trasferta_elements:
-        squadra_trasferta = trasferta_elements[0].text_content().strip()
+    try:
+        trasferta_locator = page.locator(SELECTOR_SQUADRA_TRASFERTA).first
+        if trasferta_locator.count() > 0:
+            squadra_trasferta = trasferta_locator.text_content().strip()
+    except:
+        pass
     
     # Fallback se non trovati
     if not squadra_casa or not squadra_trasferta:
-        xpath_teams_fallback = "//a[contains(@href, '/team/')]//bdi"
-        team_elements = tree.xpath(xpath_teams_fallback)
-        if len(team_elements) >= 2:
-            squadra_casa = team_elements[0].text_content().strip()
-            squadra_trasferta = team_elements[1].text_content().strip()
+        try:
+            teams = page.locator('a[href*="/team/"] bdi').all_text_contents()
+            if len(teams) >= 2:
+                squadra_casa = teams[0].strip()
+                squadra_trasferta = teams[1].strip()
+        except:
+            pass
     
-    # Data e Ora
+    # ===== DATA E ORA =====
     data = None
     ora = None
     
-    data_xpath = "//span[contains(text(), 'Oggi') or contains(text(), 'Domani') or contains(text(), '/202') or contains(text(), '-202')]"
-    data_elements = tree.xpath(data_xpath)
-    
     cest = pytz.timezone('Europe/Rome')
     
-    for element in data_elements:
-        text = element.text_content().strip()
-        if text.lower() == 'oggi':
+    # Data
+    try:
+        # Cerca "Oggi" o "Domani"
+        if page.locator('span:has-text("Oggi")').count() > 0:
             data = datetime.datetime.now(cest).strftime('%Y-%m-%d')
-            break
-        elif text.lower() == 'domani':
+        elif page.locator('span:has-text("Domani")').count() > 0:
             data = (datetime.datetime.now(cest) + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-            break
-        elif re.match(r'\d{2}[/-]\d{2}[/-]\d{4}', text):
-            parsed_date = datetime.datetime.strptime(text, '%d/%m/%Y') if '/' in text else datetime.datetime.strptime(text, '%d-%m-%Y')
-            data = parsed_date.strftime('%Y-%m-%d')
-            break
-        elif re.match(r'\d{4}-\d{2}-\d{2}', text):
-            data = text
-            break
+        else:
+            # Cerca formato dd/mm/yyyy
+            date_spans = page.locator('span').all_text_contents()
+            for text in date_spans:
+                if re.match(r'\d{2}[/-]\d{2}[/-]\d{4}', text):
+                    parsed_date = datetime.datetime.strptime(text, '%d/%m/%Y') if '/' in text else datetime.datetime.strptime(text, '%d-%m-%Y')
+                    data = parsed_date.strftime('%Y-%m-%d')
+                    break
+    except:
+        pass
     
-    ora_xpath = "//span[contains(text(), ':') and string-length(text()) <= 5 and string-length(text()) >= 4]"
-    ora_elements = tree.xpath(ora_xpath)
+    # Ora
+    try:
+        time_spans = page.locator('span').all_text_contents()
+        for text in time_spans:
+            text = text.strip()
+            if re.match(r'^\d{2}:\d{2}$', text):
+                ora_parsed = datetime.datetime.strptime(text, '%H:%M')
+                ora_corretta = ora_parsed + datetime.timedelta(hours=ORA_LEGALE_OFFSET)
+                ora = ora_corretta.strftime('%H:%M') + ":00"
+                break
+    except:
+        pass
     
-    for element in ora_elements:
-        text = element.text_content().strip()
-        if re.match(r'\d{2}:\d{2}', text):
-            ora_parsed = datetime.datetime.strptime(text, '%H:%M')
-            ora_corretta = ora_parsed + datetime.timedelta(hours=ORA_LEGALE_OFFSET)
-            ora = ora_corretta.strftime('%H:%M') + ":00"
-            break
-    
-    # Stato
+    # ===== STATO =====
     stato = None
     
     if data and ora:
@@ -349,12 +438,16 @@ def extract_match_basic_info(tree):
         now = datetime.datetime.now(cest)
         
         # Verifica se finita
-        finita_elements = tree.xpath(XPATH_STATUS)
         is_finished = False
-        if finita_elements:
-            status_text = finita_elements[0].text_content().strip().lower()
-            if 'finita' in status_text or 'finished' in status_text:
-                is_finished = True
+        try:
+            status_texts = page.locator(SELECTOR_STATUS).all_text_contents()
+            for status_text in status_texts:
+                status_lower = status_text.lower()
+                if 'finita' in status_lower or 'finished' in status_lower or 'end' in status_lower:
+                    is_finished = True
+                    break
+        except:
+            pass
         
         if is_finished:
             stato = 'F'
@@ -363,20 +456,24 @@ def extract_match_basic_info(tree):
         else:
             stato = 'NG'
     
-    # Goal (solo se F o IC)
+    # ===== GOAL (solo se F o IC) =====
     goalcasa = None
     goaltrasferta = None
     
     if stato in ['F', 'IC']:
-        goal_casa_elements = tree.xpath(XPATH_GOAL_CASA)
-        goal_trasferta_elements = tree.xpath(XPATH_GOAL_TRASFERTA)
-        
-        if goal_casa_elements and goal_trasferta_elements:
-            try:
-                goalcasa = int(goal_casa_elements[0].text_content().strip())
-                goaltrasferta = int(goal_trasferta_elements[0].text_content().strip())
-            except ValueError:
-                pass
+        try:
+            # Cerca tutti gli span con score
+            score_spans = page.locator('span.textStyle_display\\.extraLarge').all_text_contents()
+            
+            # I primi due dovrebbero essere casa e trasferta
+            if len(score_spans) >= 2:
+                try:
+                    goalcasa = int(score_spans[0].strip())
+                    goaltrasferta = int(score_spans[1].strip())
+                except ValueError:
+                    pass
+        except:
+            pass
     
     return {
         'casa': squadra_casa,
@@ -391,154 +488,295 @@ def extract_match_basic_info(tree):
 # ==================== ESTRAZIONE EVENTI ====================
 
 def extract_eventi(page):
-    """Estrae gli eventi della partita"""
+    """
+    Estrae gli eventi usando lxml per velocità
     
+    Args:
+        page: Oggetto page di Playwright
+    
+    Returns:
+        Lista di dict con eventi
+    """
     eventi = []
-    i = 1
     
-    while True:
-        current_xpath = XPATH_BASE_EVENTI.format(n=i)
+    try:
+        # ✅ SCARICA HTML UNA VOLTA SOLA
+        html_content = page.content()
+        tree = html.fromstring(html_content)
         
-        if get_locator_count(page, current_xpath) == 0:
-            break
+        # XPath: Cerca tutti i container degli eventi
+        eventi_xpath = '//div[contains(@class, "hover:bg_surface") and contains(@class, "cursor_pointer")]'
+        eventi_elements = tree.xpath(eventi_xpath)
         
-        try:
-            container = page.locator(f"xpath={current_xpath}").first
-            
-            contenuto_1 = get_inner_text_safe(container.locator(f"xpath={XPATH_TESTO_1}"))
-            contenuto_2 = get_inner_text_safe(container.locator(f"xpath={XPATH_TESTO_2}"))
-            text_full = get_text_content_safe(container)
-            
-            if not contenuto_1 and not contenuto_2 and not text_full:
-                i += 1
-                continue
-            
-            # Classificazione evento
-            tipo = "ALTRO"
-            descrizione = ""
-            
-            if "GOL" in text_full:
-                tipo = "⚽ GOL"
-                descrizione = f"{contenuto_1} (Assist: {contenuto_2})" if contenuto_2 else contenuto_1
-            elif "CARTELLINO" in text_full or "FALLO" in text_full:
-                if "GIALLO" in text_full:
-                    tipo = "🟨 CARTELLINO"
-                else: 
+        print(f"   🔍 Trovati {len(eventi_elements)} eventi")
+        
+        for evento_elem in eventi_elements:
+            try:
+                # Estrai minuto
+                minuto = ""
+                minuto_xpath = './/span[contains(@class, "textStyle_display.micro")]'
+                minuto_elements = evento_elem.xpath(minuto_xpath)
+                if minuto_elements:
+                    minuto = minuto_elements[0].text_content().strip()
+                
+                # Estrai giocatori (primo span per il giocatore principale)
+                giocatore = ""
+                giocatore_xpath = './/span[contains(@class, "textStyle_body.medium") and contains(@class, "c_neutrals.nLv1")]'
+                giocatore_elements = evento_elem.xpath(giocatore_xpath)
+                if giocatore_elements:
+                    giocatore = giocatore_elements[0].text_content().strip()
+                
+                # Estrai tipo evento
+                tipo_xpath = './/span[contains(@class, "c_neutrals.nLv3")]'
+                tipo_elements = evento_elem.xpath(tipo_xpath)
+                tipo_testo = tipo_elements[0].text_content().strip() if tipo_elements else ""
+                
+                # Determina il tipo di evento
+                tipo = "ALTRO"
+                descrizione = giocatore
+                
+                # Controlla SVG title per determinare il tipo
+                svg_title_xpath = './/svg/title'
+                svg_titles = evento_elem.xpath(svg_title_xpath)
+                svg_text = " ".join([t.text_content() for t in svg_titles]).lower()
+                
+                if "gol" in svg_text or "goal" in svg_text:
+                    tipo = "⚽ GOL"
+                    # Cerca assistman
+                    assist_xpath = './/span[contains(text(), "Assist:")]'
+                    assist_elements = evento_elem.xpath(assist_xpath)
+                    if assist_elements:
+                        assist_text = assist_elements[0].text_content()
+                        assistman = assist_text.split("Assist:")[-1].strip()
+                        descrizione = f"{giocatore} (Assist: {assistman})"
+                
+                elif "giallo" in svg_text or "yellow" in svg_text:
+                    if "rosso" in svg_text or "red" in svg_text:
+                        tipo = "🟥 CARTELLINO"
+                    else:
+                        tipo = "🟨 CARTELLINO"
+                    descrizione = giocatore
+                
+                elif "rosso" in svg_text or "red" in svg_text:
                     tipo = "🟥 CARTELLINO"
-                descrizione = contenuto_1
-            elif contenuto_1 and contenuto_2:
-                tipo = "🔄 SOSTITUZIONE"
-                descrizione = f"Esce: {contenuto_1}, Entra: {contenuto_2}"
-            
-            if tipo != "ALTRO":
-                eventi.append({
-                    'tipo': tipo,
-                    'descrizione': descrizione
-                })
-            
-            i += 1
-            
-        except Exception:
-            i += 1
-            continue
-    
-    return eventi
+                    descrizione = giocatore
+                
+                elif "rigore sbagliato" in tipo_testo.lower() or "penalty missed" in tipo_testo.lower():
+                    tipo = "❌ RIGORE SBAGLIATO"
+                    descrizione = giocatore
+                
+                # Sostituzione (ha icona freccia e testo "Fuori:")
+                elif "fuori:" in tipo_testo.lower() or "out:" in tipo_testo.lower():
+                    tipo = "🔄 SOSTITUZIONE"
+                    giocatore_fuori = tipo_testo.split(":")[-1].strip()
+                    descrizione = f"Esce: {giocatore_fuori}, Entra: {giocatore}"
+                
+                # Aggiungi solo se tipo rilevante
+                if tipo != "ALTRO" and giocatore:
+                    eventi.append({
+                        'tipo': tipo,
+                        'descrizione': descrizione,
+                        'minuto': minuto
+                    })
+                    
+            except Exception as e:
+                print(f"   ⚠️  Errore elaborazione evento: {e}")
+                continue
+        
+        print(f"   ✅ Estratti {len(eventi)} eventi validi")
+        return eventi
+        
+    except Exception as e:
+        print(f"   ❌ Errore estrazione eventi: {e}")
+        traceback.print_exc()
+        return []
 
 # ==================== ESTRAZIONE FORMAZIONI ====================
 
-def extract_formazioni(tree):
-    """Estrae le formazioni (titolari + panchinari) e i voti delle due squadre"""
-    
+def extract_formazioni(page, squadra_casa, squadra_trasferta):
+    """
+    Estrae le formazioni e i voti usando XPath mirati basati sulla struttura HTML.
+
+    Args:
+        page: Oggetto page di Playwright
+        squadra_casa: Nome squadra di casa
+        squadra_trasferta: Nome squadra in trasferta
+
+    Returns:
+        Dict con formazioni di casa e trasferta
+    """
     risultati = {"casa": [], "trasferta": []}
-    squadre = [("casa", 2, "1"), ("trasferta", 3, "3")]  # (nome, idx_titolari, idx_panchina)
     
-    for squadra, idx_titolari, idx_panchina_base in squadre:
-        base = f"{BASE_FORMAZIONI}[{idx_titolari}]/div[1]"
+    try:
+        # ✅ SCARICA HTML UNA VOLTA SOLA
+        html_content = page.content()
+        tree = html.fromstring(html_content)
         
-        # ===== TITOLARI =====
+        print(f"\n{'='*60}")
+        print(f"📊 ESTRAZIONE FORMAZIONI (Versione Corretta)")
+        print(f"{'='*60}")
         
-        # Portiere (Elemento 1)
-        nome_p = tree.xpath(f"{base}/div[1]/div/div/div/div/div[2]/span")
-        voto_p = tree.xpath(f"{base}/div[1]/div/div/div/div/div[1]/div[3]/div/div/span/div/span")
+        # --- TITOLARI ---
+        # XPath dei nomi: span con color="onColor.primary" e classe "Text Dodlb"
+        titolari_xpath = '//span[@color="onColor.primary" and contains(@class, "Dodlb")]'
+        titolari_elements = tree.xpath(titolari_xpath)
         
-        if nome_p:
-            nome = pulisci_nome(nome_p[0].text_content())
-            voto = voto_p[0].text_content().strip().replace(',', '.') if voto_p else "-"
-            
-            # Filtra solo voti validi
-            if voto != '-':
-                try:
-                    voto_float = float(voto)
-                except ValueError:
-                    voto_float = None
-                
-                risultati[squadra].append({"nome": nome, "voto": voto_float, "ruolo": "POR", "titolare": True})
+        print(f"\n👥 TITOLARI ({len(titolari_elements)} trovati)")
+        print(f"{'─'*60}")
         
-        # Altre linee (linea 2 in poi)
-        linea = 2
-        while True:
-            trovati = False
-            for slot in range(1, 6): 
-                nome_path = f"{base}/div[{linea}]/div/div[{slot}]/div/div/div[2]/span"
-                voto_path = f"{base}/div[{linea}]/div/div[{slot}]/div/div/div[1]/div[3]/div/div/span/div/span"
+        num_titolari_per_squadra = len(titolari_elements) // 2
+        
+        for idx, titolare_elem in enumerate(titolari_elements):
+            try:
+                # Determina squadra
+                if idx < num_titolari_per_squadra:
+                    squadra_key = "casa"
+                    nome_squadra = squadra_casa
+                    squadra_label = "🏠 CASA"
+                else:
+                    squadra_key = "trasferta"
+                    nome_squadra = squadra_trasferta
+                    squadra_label = "✈️ TRASFERTA"
                 
-                nome_elem = tree.xpath(nome_path)
-                if not nome_elem:
-                    continue
+                # ✅ ESTRAI NOME
+                nome_text = titolare_elem.text_content().strip()
+                nome = re.sub(r'^\d+', '', nome_text).strip()
+                nome = pulisci_nome(nome) # Assumi che pulisci_nome esista
                 
-                voto_elem = tree.xpath(voto_path)
-                nome = pulisci_nome(nome_elem[0].text_content())
-                voto = voto_elem[0].text_content().strip().replace(',', '.') if voto_elem else "-"
-                
-                # Filtra solo voti validi
-                if voto != '-':
-                    try:
-                        voto_float = float(voto)
-                    except ValueError:
-                        voto_float = None 
+                # ✅ ESTRAI VOTO - LOGICA CORRETTA
+                voto = None
+                player_container = titolare_elem.xpath('./ancestor::div[3]') 
+
+                if player_container:
+                    # 💡 STRATEGIA CHIAVE: Cerca l'elemento che contiene 'aria-valuenow' (il tuo blocco HTML)
+                    aria_voto_xpath = './/span[@role="meter" and @aria-valuenow]'
+                    voto_span = player_container[0].xpath(aria_voto_xpath)
                     
-                    risultati[squadra].append({"nome": nome, "voto": voto_float, "ruolo": f"L{linea}", "titolare": True})
-                    trovati = True
-            
-            if not trovati:
-                break
-            linea += 1
-            if linea > 7:  # Safety break
-                break
-        
-        # ===== PANCHINARI =====
-        
-        idx_panchina = 1
-        while True:
-            base_giocatore = f"{BASE_PANCHINARI}/div[{idx_panchina_base}]/a[{idx_panchina}]"
-            
-            nome_path_panchina = f"{base_giocatore}/div/div[3]/div[1]/div[1]/span/span"
-            voto_path_panchina = f"{base_giocatore}/div/div[3]/div[2]/div/div"
-            
-            nome_elem = tree.xpath(nome_path_panchina)
-            
-            if not nome_elem:
-                break
-            
-            voto_elem = tree.xpath(voto_path_panchina)
-            
-            nome = pulisci_nome(nome_elem[0].text_content())
-            voto = voto_elem[0].text_content().strip().replace(',', '.') if voto_elem else "-"
-            
-            # Filtra solo voti validi (panchinari che sono entrati)
-            if nome and voto != '-':
-                try:
-                    voto_float = float(voto)
-                except ValueError:
-                    voto_float = None
+                    if voto_span:
+                        # Preleva il valore numerico dall'attributo 'aria-valuenow'
+                        voto_text = voto_span[0].get('aria-valuenow')
+                        if voto_text:
+                            # Converti direttamente in float. Non serve 'replace' se l'input è un intero pulito.
+                            try:
+                                voto = float(voto_text)
+                            except ValueError:
+                                # Se per qualche motivo il valore non è numerico, resta None
+                                pass
+                                
+                # ✅ PRINT DEBUG (il resto del tuo codice originale)
+                if voto is not None:
+                    print(f"    {squadra_label} | {nome:20s} | Voto: {voto}")
+                    
+                    risultati[squadra_key].append({
+                        "nome": nome,
+                        "voto": voto,
+                        "ruolo": "TIT",
+                        "titolare": True,
+                        "squadra": nome_squadra
+                    })
+                else:
+                    # Aggiunge il giocatore con voto: None
+                    risultati[squadra_key].append({
+                        "nome": nome,
+                        "voto": None, 
+                        "ruolo": "TIT",
+                        "titolare": True,
+                        "squadra": nome_squadra
+                    })
+                    print(f"    {squadra_label} | {nome:20s} | ❌ Voto non trovato")
                 
-                risultati[squadra].append({"nome": nome, "voto": voto_float, "ruolo": "SUB", "titolare": False})
+            except Exception as e:
+                print(f"   ⚠️ Errore estrazione titolare {idx}: {e}")
+                continue
+        
+        # --- PANCHINARI ---
+        
+        # ===== PANCHINARI (LOGICA AGGIORNATA PER BLOCCHI SEPARATI) =====
+
+        print(f"\n🪑 PANCHINARI (con voto) - Separazione per blocco HTML")
+        print(f"{'─'*60}")
+        
+        giocatori_gia_processati = set(g['nome'] for g in risultati['casa'] + risultati['trasferta'])
+
+        # --- FASE 1: Individuare i due contenitori principali ---
+        # Cerchiamo i due div con classe "DooVT" che contengono i panchinari di CASA e TRASFERTA
+        blocchi_squadra = tree.xpath('//div[@class="Box DooVT"]')
+        
+        if len(blocchi_squadra) < 2:
+            print(" ⚠️ Errore: Trovati meno di 2 blocchi DooVT per i panchinari. Impossibile separare.")
+        else:
+            # Assunzione: Il primo blocco è CASA, il secondo è TRASFERTA.
+            blocchi_mapping = {
+                "casa": {"element": blocchi_squadra[0], "nome_squadra": squadra_casa, "label": "🏠 CASA"},
+                "trasferta": {"element": blocchi_squadra[1], "nome_squadra": squadra_trasferta, "label": "✈️ TRASFERTA"},
+            }
             
-            idx_panchina += 1
-            if idx_panchina > 25:  # Safety break
-                break
-    
-    return risultati
+            # XPath del panchinaro: <a> che contiene <div class="deRHiB cQgcrM">
+            panchinaro_a_xpath = './a/div[contains(@class, "deRHiB") and contains(@class, "cQgcrM") and @cursor="pointer"]'
+            
+            for squadra_key, data in blocchi_mapping.items():
+                
+                # Trova tutti i panchinari all'interno del blocco specifico (casa o trasferta)
+                # NOTA: Qui l'elemento di partenza è il <div> con classe "deRHiB cQgcrM", 
+                # che si trova all'interno del link <a>, che è un figlio del blocco DooVT.
+                panchinari_squadra = data["element"].xpath(panchinaro_a_xpath)
+                
+                print(f"   Totali {data['label']}: {len(panchinari_squadra)}")
+
+                for panchinaro_elem in panchinari_squadra:
+                    try:
+                        # ✅ ESTRAI NOME
+                        nome_xpath = './/span[contains(@class, "klGMtt")]' 
+                        nome_elements = panchinaro_elem.xpath(nome_xpath)
+                        
+                        if not nome_elements:
+                            continue
+                        
+                        nome_text_content = nome_elements[0].text_content().strip()
+                        nome = pulisci_nome(nome_text_content)
+                        
+                        if nome in giocatori_gia_processati:
+                            continue 
+                        
+                        # ✅ ESTRAI VOTO (Strategia Aria-Valuenow)
+                        voto = None
+                        aria_voto_xpath = './/span[@role="meter" and @aria-valuenow]'
+                        voto_span = panchinaro_elem.xpath(aria_voto_xpath)
+                        
+                        if voto_span:
+                            voto_text = voto_span[0].get('aria-valuenow')
+                            if voto_text:
+                                voto = float(voto_text.replace(',', '.'))
+                        
+                        if voto is not None:
+                            print(f"   {data['label']} | {nome:20s} | Voto: {voto}")
+
+                            risultati[squadra_key].append({
+                                "nome": nome,
+                                "voto": voto,
+                                "ruolo": "SUB",
+                                "titolare": False,
+                                "squadra": data["nome_squadra"]
+                            })
+                            giocatori_gia_processati.add(nome)
+                        
+                    except Exception as e:
+                        continue # Salta in caso di errore di parsing
+        
+        # --- RIEPILOGO ---
+        print(f"\n{'='*60}")
+        print(f"✅ RIEPILOGO ESTRAZIONE")
+        print(f"{'='*60}")
+        print(f"🏠 Casa ({squadra_casa}): {len(risultati['casa'])} giocatori")
+        print(f"✈️ Trasferta ({squadra_trasferta}): {len(risultati['trasferta'])} giocatori")
+        print(f"{'='*60}\n")
+        
+        return risultati
+        
+    except Exception as e:
+        print(f"❌ Errore estrazione formazioni: {e}")
+        traceback.print_exc()
+        return {"casa": [], "trasferta": []}
 
 # ==================== ESTRAZIONE SINGOLA PARTITA ====================
 
@@ -571,13 +809,9 @@ def scrape_match(match_info, target_giornata, supabase):
             page.evaluate("window.scrollTo(0, 0)")
             time.sleep(1)
             
-            # Download HTML
-            html_content = page.content()
-            tree = html.fromstring(html_content)
-            
             # 1. ESTRAZIONE INFO BASE (SEMPRE)
             print("📋 Estrazione info base partita...")
-            basic_info = extract_match_basic_info(tree)
+            basic_info = extract_match_basic_info(page)
             
             match_data = {
                 'id': match_info['id'],
@@ -611,7 +845,7 @@ def scrape_match(match_info, target_giornata, supabase):
                 print(f"   ✅ {len(eventi)} eventi estratti")
                 
                 # Formazioni
-                formazioni = extract_formazioni(tree)
+                formazioni = extract_formazioni(page, basic_info['casa'], basic_info['trasferta'])
                 casa_count = len(formazioni['casa'])
                 trasferta_count = len(formazioni['trasferta'])
                 print(f"   ✅ Casa: {casa_count} giocatori | Trasferta: {trasferta_count} giocatori")
@@ -637,8 +871,7 @@ def scrape_match(match_info, target_giornata, supabase):
 
 # ==================== CALCOLO FANTAVOTO E STATISTICHE ====================
 
-def calcola_fantavoto(voto, goal, assist, gialli, rossi):
-    """Calcola il Fantavoto"""
+def calcola_fantavoto(voto, goal, assist, gialli, rossi, rigore_sbagl, is_top=False):
     if voto is None:
         return None
     
@@ -646,8 +879,14 @@ def calcola_fantavoto(voto, goal, assist, gialli, rossi):
         voto_base = float(voto)
     except ValueError:
         return None 
-        
-    fvoto = voto_base + (goal * 3) + (assist * 1) - (gialli * 0.5) - (rossi * 1)
+    
+    # Calcolo fantavoto con bonus/malus
+    fvoto = voto_base + (goal * 3) + (assist * 1) - (gialli * 0.5) - (rossi * 1) - (rigore_sbagl * 3)
+    
+    # ✅ BONUS TOP PLAYER (+1)
+    if is_top:
+        fvoto += 1
+    
     return round(fvoto, 2)
 
 def trova_id_giocatore(nome_completo, giocatori_mapping):
@@ -677,8 +916,35 @@ def trova_id_giocatore(nome_completo, giocatori_mapping):
     # 4. Nessun match trovato
     return None
 
+def identifica_top_player(formazioni):
+    top_players = set()
+    
+    for squadra in ['casa', 'trasferta']:
+        giocatori = formazioni[squadra]
+        
+        # Filtra solo giocatori con voto valido
+        voti_validi = []
+        for g in giocatori:
+            voto = g.get('voto')
+            if voto is not None and isinstance(voto, (int, float)):
+                voti_validi.append((g['nome'], voto))
+        
+        if not voti_validi:
+            continue
+        
+        # Trova il voto massimo
+        max_voto = max(voti_validi, key=lambda x: x[1])[1]
+        
+        # Aggiungi TUTTI i giocatori con quel voto (gestisce pareggi)
+        for nome, voto in voti_validi:
+            if voto == max_voto:
+                top_players.add(nome)
+                print(f"   🏆 Top Player {squadra}: {nome} (voto {voto})")
+    
+    return top_players
+
 def processa_eventi_e_voti(all_match_data, giocatori_mapping):
-    """Processa dati usando cognome per titolari, nome completo per panchinari"""
+    """Processa dati e mostra bonus/malus e top player"""
     statistiche_per_supabase = []
     giocatori_non_trovati = set()
     
@@ -688,6 +954,14 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
             continue
         
         match_id = match['match_id']
+        match_name = match['match_name']
+        
+        print(f"\n{'='*80}")
+        print(f"⚽ ANALISI PARTITA: {match_name.upper()}")
+        print(f"{'='*80}")
+        
+        # Identifica top players
+        top_players = identifica_top_player(match['formazioni'])
         
         # Mappa voti
         giocatori_in_campo = {}
@@ -695,30 +969,36 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
             for player_data in match['formazioni'][squadra]:
                 nome = player_data['nome']
                 voto = player_data['voto']
-                is_titolare = player_data.get('titolare', True)  # Default True per retrocompatibilità
+                is_titolare = player_data.get('titolare', True)
+                nome_squadra = player_data.get('squadra', '')
                 
-                # ✅ LOGICA MATCHING DIFFERENZIATA
+                # MATCHING CON CHIAVE COMPOSTA (nome, squadra)
                 if is_titolare:
-                    # Titolari: usa cognome
-                    giocatore_id = giocatori_mapping['cognomi'].get(nome, None)
+                    giocatore_id = giocatori_mapping['cognomi'].get((nome, nome_squadra), None)
                 else:
-                    # Panchinari: usa nome completo
-                    giocatore_id = giocatori_mapping['nomi_completi'].get(nome, None)
+                    giocatore_id = giocatori_mapping['nomi_completi'].get((nome, nome_squadra), None)
                 
                 if giocatore_id is None:
-                    giocatori_non_trovati.add(f"{nome} ({'titolare' if is_titolare else 'panchinaro'})")
+                    giocatori_non_trovati.add(f"{nome} ({nome_squadra}) ({'TIT' if is_titolare else 'SUB'})")
                 
                 giocatori_in_campo[nome] = {
                     'IDpartita': match_id,
-                    'IDgiocatore': giocatore_id, 
+                    'IDgiocatore': giocatore_id,
                     'goal': 0,
                     'assist': 0,
                     'gialli': 0,
                     'rossi': 0,
-                    'voto': voto
+                    'rigori sbagliati': 0,
+                    'voto': voto,
+                    'titolare': is_titolare,
+                    'top': nome in top_players,
+                    'squadra': nome_squadra
                 }
         
         # Aggiorna con eventi
+        print(f"\n📋 EVENTI E BONUS/MALUS")
+        print(f"{'─'*80}")
+        
         for evento in match['eventi']:
             tipo = evento['tipo']
             descrizione = evento['descrizione']
@@ -729,76 +1009,154 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                     marcatore_nome = marcatore_match.group(1).strip()
                     if marcatore_nome in giocatori_in_campo:
                         giocatori_in_campo[marcatore_nome]['goal'] += 1
+                        print(f"   ⚽ GOL: {marcatore_nome} (+3 bonus)")
                 
                 assist_match = re.search(r'\(Assist: (.+?)\)', descrizione)
                 if assist_match:
                     assistman_nome = assist_match.group(1).strip()
                     if assistman_nome in giocatori_in_campo:
                         giocatori_in_campo[assistman_nome]['assist'] += 1
-                        
+                        print(f"   🎯 ASSIST: {assistman_nome} (+1 bonus)")
+
+            elif tipo == "❌ RIGORE SBAGLIATO":
+                giocatore_nome = descrizione.strip()
+                if giocatore_nome in giocatori_in_campo:
+                    giocatori_in_campo[giocatore_nome]['rigori sbagliati'] += 1
+                    print(f"   ❌ RIGORE SBAGLIATO: {giocatore_nome} (-3 malus)")
+                    
             elif tipo == "🟨 CARTELLINO":
                 giocatore_nome = descrizione.strip()
                 if giocatore_nome in giocatori_in_campo:
-                     giocatori_in_campo[giocatore_nome]['gialli'] += 1
+                    giocatori_in_campo[giocatore_nome]['gialli'] += 1
+                    print(f"   🟨 GIALLO: {giocatore_nome} (-0.5 malus)")
             
             elif tipo == "🟥 CARTELLINO":
                 giocatore_nome = descrizione.strip()
                 if giocatore_nome in giocatori_in_campo:
-                     giocatori_in_campo[giocatore_nome]['rossi'] += 1
+                    giocatori_in_campo[giocatore_nome]['rossi'] += 1
+                    print(f"   🟥 ROSSO: {giocatore_nome} (-1 malus)")
         
         # Finalizzazione
+        print(f"\n📊 FANTAVOTI CALCOLATI")
+        print(f"{'─'*80}")
+        
         for key, data in giocatori_in_campo.items():
             if data['IDgiocatore'] is not None:
                 gialli = data['gialli']
                 rossi = data['rossi']
                 
+                # Se ha rosso E giallo, conta solo il rosso
                 if rossi > 0 and gialli > 0:
-                    gialli = 0 
+                    gialli = 0
                     rossi = 1
                 
                 fvoto = calcola_fantavoto(
-                    voto=data['voto'], 
-                    goal=data['goal'], 
-                    assist=data['assist'], 
-                    gialli=gialli, 
-                    rossi=rossi
+                    voto=data['voto'],
+                    goal=data['goal'],
+                    assist=data['assist'],
+                    gialli=gialli,
+                    rossi=rossi,
+                    rigore_sbagl=data['rigori sbagliati'],
+                    is_top=data['top']
                 )
+                
+                # ✅ PRINT DETTAGLIATO
+                bonus_malus = []
+                if data['goal'] > 0:
+                    bonus_malus.append(f"+{data['goal']*3} gol")
+                if data['assist'] > 0:
+                    bonus_malus.append(f"+{data['assist']} assist")
+                if gialli > 0:
+                    bonus_malus.append(f"-{gialli*0.5} giallo")
+                if rossi > 0:
+                    bonus_malus.append(f"-{rossi} rosso")
+                if data['rigori sbagliati'] > 0:
+                    bonus_malus.append(f"-{data['rigori sbagliati']*3} rigori sbagliati")
+                if data['top'] == True:
+                    bonus_malus.append(f"")
+                
+                bonus_str = " | ".join(bonus_malus) if bonus_malus else "nessun bonus/malus"
+                top_str = "🏆 +1 TOP" if data['top'] else ""
+
+                print(f"   {key:20s} | Voto: {data['voto']:.1f} → FV: {fvoto:.1f} | {bonus_str}{top_str}")
                 
                 payload = {
                     'IDpartita': data['IDpartita'],
-                    'IDgiocatore': data['IDgiocatore'], 
+                    'IDgiocatore': data['IDgiocatore'],
                     'goal': data['goal'],
+                    'rigore_sbagliato': data['rigori sbagliati'],
                     'assist': data['assist'],
                     'gialli': gialli,
                     'rossi': rossi,
                     'voto': data['voto'],
-                    'fvoto': fvoto
+                    'fvoto': fvoto,
+                    'titolare': data['titolare'],
+                    'top': data['top']
                 }
                 statistiche_per_supabase.append(payload)
     
     if giocatori_non_trovati:
-        print(f"\n⚠️ Giocatori trovati nello scraping ma NON nel DB: {', '.join(giocatori_non_trovati)}")
+        print(f"\n{'='*80}")
+        print(f"⚠️  GIOCATORI NON TROVATI NEL DB ({len(giocatori_non_trovati)})")
+        print(f"{'='*80}")
+        for g in sorted(giocatori_non_trovati):
+            print(f"   • {g}")
     
     return statistiche_per_supabase
 
-def insert_statistiche_supabase(supabase: Client, data_list):
-    """Inserisce o aggiorna le statistiche nella tabella 'Statistiche'"""
-    
-    print(f"\n{'='*80}")
-    print(f"FASE 4: CARICAMENTO STATISTICHE IN SUPABASE")
-    print(f"{'='*80}")
-    
-    if not data_list:
-        print("⚠️ Nessun record di statistiche da caricare.")
-        return False
-    
+def insert_statistiche_supabase(supabase, statistiche_list):
+    """
+    Inserisce le statistiche in Supabase tramite upsert
+    Chiave primaria composta: (IDgiocatore, IDpartita)
+    ✅ Mostra i duplicati trovati
+    """
     try:
+        if not statistiche_list:
+            print("⚠️  Nessuna statistica da inserire")
+            return False
+        
+        # ✅ DEDUPLICA CON TRACCIAMENTO
+        stats_dict = {}
+        duplicati = []
+        
+        for stat in statistiche_list:
+            key = (stat['IDpartita'], stat['IDgiocatore'])
+            
+            if key in stats_dict:
+                # ✅ DUPLICATO TROVATO!
+                duplicati.append({
+                    'IDpartita': stat['IDpartita'],
+                    'IDgiocatore': stat['IDgiocatore'],
+                    'vecchio': stats_dict[key],
+                    'nuovo': stat
+                })
+            
+            stats_dict[key] = stat  # Mantiene l'ultimo
+        
+        unique_stats = list(stats_dict.values())
+        
+        print(f"📊 Record originali: {len(statistiche_list)}")
+        print(f"🔹 Record unici (dopo deduplica): {len(unique_stats)}")
+        
+        # ✅ MOSTRA DUPLICATI
+        if duplicati:
+            print(f"\n⚠️  Trovati {len(duplicati)} duplicati:")
+            for dup in duplicati[:10]:  # Mostra max 10
+                print(f"\n   🔄 IDgiocatore: {dup['IDgiocatore']}, IDpartita: {dup['IDpartita']}")
+                print(f"      VECCHIO → goal: {dup['vecchio'].get('goal')}, assist: {dup['vecchio'].get('assist')}, voto: {dup['vecchio'].get('voto')}")
+                print(f"      NUOVO   → goal: {dup['nuovo'].get('goal')}, assist: {dup['nuovo'].get('assist')}, voto: {dup['nuovo'].get('voto')}")
+            
+            if len(duplicati) > 10:
+                print(f"   ... e altri {len(duplicati) - 10} duplicati")
+        
+        # ✅ BATCH UPSERT
+        print(f"\n📥 Inserimento {len(unique_stats)} record...")
         response = supabase.table('Statistiche').upsert(
-            data_list, 
-            on_conflict="IDpartita, IDgiocatore"
+            unique_stats,
+            on_conflict='IDgiocatore,IDpartita'
         ).execute()
         
-        print(f"✅ Inserimento/Aggiornamento completato per {len(data_list)} record.")
+        print(f"✅ {len(unique_stats)} statistiche inserite/aggiornate in Supabase")
         return True
         
     except Exception as e:
@@ -900,4 +1258,3 @@ if __name__ == "__main__":
         traceback.print_exc()
         import sys
         sys.exit(1)
-
