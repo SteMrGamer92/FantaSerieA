@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from playwright.sync_api import sync_playwright
 from playwright._impl._errors import TimeoutError as PlaywrightTimeoutError
 from lxml import html
@@ -14,7 +17,7 @@ import pytz
 # ==================== CONFIGURAZIONE GLOBALE ====================
 URL_TORNEO = 'https://www.sofascore.com/it/torneo/calcio/italy/serie-a/23#id:76457#tab:matches'
 CONSENT_BUTTON_SELECTOR = 'button:has-text("Acconsento"), button:has-text("Consent")'
-TARGET_GIORNATA = 4
+TARGET_GIORNATA = 12
 
 BUTTON_GIORNATA_SELECTOR = 'button.dropdown__button[aria-haspopup="listbox"]:has-text("Round"), button.dropdown__button[aria-haspopup="listbox"]:has-text("Giornata")'
 CONTAINER_GIORNATA_SELECTOR = 'div.card-component.mobile-only'
@@ -26,13 +29,14 @@ SCROLL_CONTAINER_SELECTOR = '.beautiful-scrollbar__content'
 # Info Partita Base
 SELECTOR_SQUADRA_CASA = 'div[style*="left: 0px"] bdi.textStyle_display\\.medium'
 SELECTOR_SQUADRA_TRASFERTA = 'div[style*="right: 0px"] bdi.textStyle_display\\.medium'
-SELECTOR_GOAL_CASA = 'span.textStyle_display\\.extraLarge'  # Primo elemento
-SELECTOR_GOAL_TRASFERTA = 'span.textStyle_display\\.extraLarge'  # Secondo elemento
+SELECTOR_PUNTEGGIO_TOTALE = 'span.textStyle_body\\.medium.c_neutrals\\.nLv1.trunc_true'
 SELECTOR_STATUS = 'div.card-component span[class*="textStyle"]'
+SELECTOR_STATO_DATA = 'span.textStyle_body\\.medium.c_neutrals\\.nLv3.ta_center.d_block'
+SELECTOR_ORA = 'span.textStyle_display\\.large.c_neutrals\\.nLv1.d_block.ta_center.pos_absolute'
 
 # Moduli
-SELECTOR_MODULO_CASA = 'span.Text.gHLcGU[color="onSurface.nLv1"]'  # Primo
-SELECTOR_MODULO_TRASFERTA = 'span.Text.gHLcGU[color="onSurface.nLv1"]'  # Secondo
+SELECTOR_MODULO_CASA = 'span.Text.gHLcGU[color="onSurface.nLv1"]'
+SELECTOR_MODULO_TRASFERTA = 'span.Text.gHLcGU[color="onSurface.nLv1"]'
 
 # Eventi
 SELECTOR_EVENTI_CONTAINER = 'div.hover\\:bg_surface\\.s2.cursor_pointer'
@@ -392,21 +396,66 @@ def extract_match_basic_info(page):
         except:
             pass
     
+    # ===== STATO =====
+    stato_partita = 'NG' 
+
+    try:
+        # Estrai il contenuto testuale e puliscilo dagli spazi
+        stato_text = page.locator(SELECTOR_STATO_DATA).inner_text().strip()
+        
+        # 1. PARTITA FINITA (F)
+        if stato_text == "Finita":
+            stato_partita = 'F'
+            
+        # 2. PARTITA IN CORSO (IC)
+        # Copre stati come "Intervallo" o l'indicazione dei minuti giocati ("75'", "45+2'")
+        elif stato_text == "Intervallo" or re.match(r'^\d+[\'\+]?$', stato_text):
+            stato_partita = 'IC'
+            
+        # 3. NON GIOCATA (NG)
+        # Se non è "Finita" o "In Corso", assumiamo che sia una data/orario futuro ("Oggi", "20:45", "Domani", "10/03").
+        else:
+            stato_partita = 'NG'
+            
+    except Exception as e:
+        # Gestione di eventuali errori di locator (es. elemento non trovato)
+        # In caso di fallimento, l'ipotesi più sicura è che la partita non sia ancora iniziata.
+        print(f"⚠️ Errore nell'estrazione dello stato/data, default a NG: {e}")
+        stato_partita = 'NG' # Mantiene il default
+        
+    # Sostituisci la tua vecchia variabile 'stato' con 'stato_partita'
+    stato = stato_partita
+
     # ===== DATA E ORA =====
     data = None
     ora = None
-    
+
     cest = pytz.timezone('Europe/Rome')
-    
-    # Data
+
+    # ===== STATO (PRIMA DI DATA/ORA) =====
+    stato_partita = 'NG' 
+
     try:
-        # Cerca "Oggi" o "Domani"
+        stato_text = page.locator(SELECTOR_STATO_DATA).inner_text().strip()
+        
+        if stato_text == "Finita":
+            stato_partita = 'F'
+        elif stato_text == "Intervallo" or re.match(r'^\d+[\'\+]?$', stato_text):
+            stato_partita = 'IC'
+        else:
+            stato_partita = 'NG'
+            
+    except Exception as e:
+        print(f"⚠️ Errore nell'estrazione dello stato/data, default a NG: {e}")
+        stato_partita = 'NG'
+
+    # ===== DATA =====
+    try:
         if page.locator('span:has-text("Oggi")').count() > 0:
             data = datetime.datetime.now(cest).strftime('%Y-%m-%d')
         elif page.locator('span:has-text("Domani")').count() > 0:
             data = (datetime.datetime.now(cest) + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
         else:
-            # Cerca formato dd/mm/yyyy
             date_spans = page.locator('span').all_text_contents()
             for text in date_spans:
                 if re.match(r'\d{2}[/-]\d{2}[/-]\d{4}', text):
@@ -415,46 +464,50 @@ def extract_match_basic_info(page):
                     break
     except:
         pass
-    
-    # Ora
+
+    # ===== ORA (GESTIONE DIVERSA PER F/IC vs NG) =====
     try:
-        time_spans = page.locator('span').all_text_contents()
-        for text in time_spans:
-            text = text.strip()
-            if re.match(r'^\d{2}:\d{2}$', text):
-                ora_parsed = datetime.datetime.strptime(text, '%H:%M')
-                ora_corretta = ora_parsed + datetime.timedelta(hours=ORA_LEGALE_OFFSET)
-                ora = ora_corretta.strftime('%H:%M') + ":00"
-                break
-    except:
-        pass
-    
-    # ===== STATO =====
-    stato = None
-    
-    if data and ora:
-        match_datetime = datetime.datetime.strptime(f"{data} {ora[:5]}", '%Y-%m-%d %H:%M')
-        match_datetime = cest.localize(match_datetime)
-        now = datetime.datetime.now(cest)
-        
-        # Verifica se finita
-        is_finished = False
-        try:
-            status_texts = page.locator(SELECTOR_STATUS).all_text_contents()
-            for status_text in status_texts:
-                status_lower = status_text.lower()
-                if 'finita' in status_lower or 'finished' in status_lower or 'end' in status_lower:
-                    is_finished = True
-                    break
-        except:
-            pass
-        
-        if is_finished:
-            stato = 'F'
-        elif now >= match_datetime:
-            stato = 'IC'
+        if stato_partita in ['F', 'IC']:
+            # ✅ PER PARTITE FINITE/IN CORSO: Usa SELECTOR_ORA
+            ora_locator = page.locator(SELECTOR_ORA)
+            if ora_locator.count() > 0:
+                ora_text = ora_locator.first.inner_text().strip()
+                # Rimuovi eventuali spazi extra (es. "20 : 45" → "20:45")
+                ora_text = ora_text.replace(' ', '')
+                
+                if re.match(r'^\d{2}:\d{2}$', ora_text):
+                    ora_parsed = datetime.datetime.strptime(ora_text, '%H:%M')
+                    ora_corretta = ora_parsed + datetime.timedelta(hours=ORA_LEGALE_OFFSET)
+                    ora = ora_corretta.strftime('%H:%M') + ":00"
         else:
-            stato = 'NG'
+            # ✅ PER PARTITE NON GIOCATE: Cerca in tutti gli span
+            time_spans = page.locator('span').all_text_contents()
+            for text in time_spans:
+                text = text.strip()
+                if re.match(r'^\d{2}:\d{2}$', text):
+                    ora_parsed = datetime.datetime.strptime(text, '%H:%M')
+                    ora_corretta = ora_parsed + datetime.timedelta(hours=ORA_LEGALE_OFFSET)
+                    ora = ora_corretta.strftime('%H:%M') + ":00"
+                    break
+    except Exception as e:
+        print(f"   ⚠️ Errore estrazione ora: {e}")
+        pass
+
+    # ✅ PRINT FORMATTATO (dopo estrazione data e ora)
+    if data and ora:
+        # Converti data da YYYY-MM-DD a DD-MM-YYYY per il print
+        data_display = datetime.datetime.strptime(data, '%Y-%m-%d').strftime('%d-%m-%Y')
+        # Converti ora da HH:MM:SS a HH:MM per il print
+        ora_display = ora[:5]  # Prende solo HH:MM
+        print(f"   📅 Data/Ora: {data_display} {ora_display}")
+    elif data:
+        data_display = datetime.datetime.strptime(data, '%Y-%m-%d').strftime('%d-%m-%Y')
+        print(f"   📅 Data: {data_display} | Ora: N/A")
+    elif ora:
+        ora_display = ora[:5]
+        print(f"   📅 Data: N/A | Ora: {ora_display}")
+
+    stato = stato_partita
     
     # ===== GOAL (solo se F o IC) =====
     goalcasa = None
@@ -462,17 +515,61 @@ def extract_match_basic_info(page):
     
     if stato in ['F', 'IC']:
         try:
-            # Cerca tutti gli span con score
-            score_spans = page.locator('span.textStyle_display\\.extraLarge').all_text_contents()
+            # ✅ STRATEGIA 1: Usa all_text_contents() invece di inner_text()
+            punteggio_locator = page.locator(SELECTOR_PUNTEGGIO_TOTALE)
             
-            # I primi due dovrebbero essere casa e trasferta
-            if len(score_spans) >= 2:
-                try:
-                    goalcasa = int(score_spans[0].strip())
-                    goaltrasferta = int(score_spans[1].strip())
-                except ValueError:
-                    pass
-        except:
+            if punteggio_locator.count() > 0:
+                # Prendi TUTTI i testi degli elementi che matchano
+                all_texts = punteggio_locator.all_text_contents()
+                
+                # Cerca il pattern nei testi trovati
+                for punteggio_text in all_texts:
+                    punteggio_text = punteggio_text.strip()
+                    match = re.search(r'(\d+)\s*-\s*(\d+)', punteggio_text)
+                    
+                    if match:
+                        goalcasa = int(match.group(1))
+                        goaltrasferta = int(match.group(2))
+                        print(f"   ⚽ Goal estratti: {goalcasa} - {goaltrasferta}")
+                        break
+            
+            # ✅ STRATEGIA 2 (FALLBACK): Se strategia 1 fallisce, usa XPath più specifico
+            if goalcasa is None or goaltrasferta is None:
+                print("   ⚠️  Tentativo strategia fallback per goal...")
+                
+                # Cerca span che contiene sia numero che trattino
+                score_xpath = "//span[contains(@class, 'textStyle_body') and contains(text(), '-')]"
+                score_elements = page.locator(f"xpath={score_xpath}").all_text_contents()
+                
+                for score_text in score_elements:
+                    match = re.search(r'(\d+)\s*-\s*(\d+)', score_text)
+                    if match:
+                        goalcasa = int(match.group(1))
+                        goaltrasferta = int(match.group(2))
+                        print(f"   ⚽ Goal estratti (fallback): {goalcasa} - {goaltrasferta}")
+                        break
+            
+            # ✅ STRATEGIA 3 (ULTIMO FALLBACK): Cerca nei singoli span dei numeri
+            if goalcasa is None or goaltrasferta is None:
+                print("   ⚠️  Tentativo strategia finale per goal...")
+                
+                # Prova a cercare gli score container specifici
+                score_spans = page.locator('div[class*="Box"] span[class*="textStyle"]').all_text_contents()
+                
+                numeri_trovati = []
+                for text in score_spans:
+                    text = text.strip()
+                    if text.isdigit():
+                        numeri_trovati.append(int(text))
+                
+                # Se troviamo almeno 2 numeri consecutivi, prendiamo i primi due
+                if len(numeri_trovati) >= 2:
+                    goalcasa = numeri_trovati[0]
+                    goaltrasferta = numeri_trovati[1]
+                    print(f"   ⚽ Goal estratti (scan numeri): {goalcasa} - {goaltrasferta}")
+                    
+        except Exception as e:
+            print(f"   ❌ Errore estrazione goal: {e}")
             pass
     
     return {
@@ -1042,6 +1139,38 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
         
         for key, data in giocatori_in_campo.items():
             if data['IDgiocatore'] is not None:
+                
+                # ==========================================================
+                # ✅ GESTIONE UNIFICATA DEL VOTO E CONVERSIONE A FLOAT
+                # ==========================================================
+                voto_grezzo = data['voto']
+                voto_per_calcolo = 0.0 # Default a 0.0 in caso di fallimento
+                voto_stampa = "SV"     # Default a SV per la stampa
+                
+                try:
+                    # 1. Tenta la conversione a float del voto
+                    # Sostituiamo la virgola con il punto se necessario
+                    voto_str = str(voto_grezzo).replace(',', '.') 
+                    voto_float = float(voto_str)
+                    
+                    # 2. Se la conversione è riuscita e il voto è sensato (tipicamente > 0)
+                    if voto_float > 0:
+                        voto_per_calcolo = voto_float
+                        voto_stampa = f"{voto_float:.1f}"
+                    
+                    # 3. Se la conversione riesce, ma il voto è 0 (caso raro ma possibile)
+                    else:
+                         voto_per_calcolo = 0.0
+                         voto_stampa = f"{voto_float:.1f}"
+
+                except (ValueError, TypeError):
+                    # Questo cattura None, "-", e qualsiasi altra stringa non numerica.
+                    # Manteniamo i default: voto_per_calcolo = 0.0 e voto_stampa = "SV"
+                    pass 
+                
+                # ==========================================================
+                # FINE GESTIONE VOTO
+                
                 gialli = data['gialli']
                 rossi = data['rossi']
                 
@@ -1051,7 +1180,7 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                     rossi = 1
                 
                 fvoto = calcola_fantavoto(
-                    voto=data['voto'],
+                    voto=voto_per_calcolo, # 💡 USA IL VOTO PER CALCOLO (0.0 se SV/Errore)
                     goal=data['goal'],
                     assist=data['assist'],
                     gialli=gialli,
@@ -1060,8 +1189,10 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                     is_top=data['top']
                 )
                 
-                # ✅ PRINT DETTAGLIATO
+                # ✅ PRINT DETTAGLIATO (la logica rimane invariata)
                 bonus_malus = []
+                # ... (tutta la logica di calcolo di bonus_str e top_str rimane invariata)
+                
                 if data['goal'] > 0:
                     bonus_malus.append(f"+{data['goal']*3} gol")
                 if data['assist'] > 0:
@@ -1074,11 +1205,13 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                     bonus_malus.append(f"-{data['rigori sbagliati']*3} rigori sbagliati")
                 if data['top'] == True:
                     bonus_malus.append(f"")
-                
+                    
                 bonus_str = " | ".join(bonus_malus) if bonus_malus else "nessun bonus/malus"
                 top_str = "🏆 +1 TOP" if data['top'] else ""
-
-                print(f"   {key:20s} | Voto: {data['voto']:.1f} → FV: {fvoto:.1f} | {bonus_str}{top_str}")
+                
+                # 💡 La stampa utilizza sempre la stringa voto_stampa.
+                # Se era un voto valido sarà "6.0", altrimenti "SV".
+                print(f"   {key:20s} | Voto: {voto_stampa:4s} → FV: {fvoto:.1f} | {bonus_str}{top_str}")
                 
                 payload = {
                     'IDpartita': data['IDpartita'],
@@ -1088,7 +1221,7 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                     'assist': data['assist'],
                     'gialli': gialli,
                     'rossi': rossi,
-                    'voto': data['voto'],
+                    'voto': voto_per_calcolo, # 💡 SALVA 0.0 se SV/Errore
                     'fvoto': fvoto,
                     'titolare': data['titolare'],
                     'top': data['top']
