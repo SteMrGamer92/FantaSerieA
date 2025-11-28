@@ -396,91 +396,48 @@ def extract_match_basic_info(page):
         except:
             pass
     
-    # ===== STATO =====
-    stato_partita = 'NG' 
+    # ===== STATO (PRIMA DI TUTTO) =====
+    stato = 'NG'  # ✅ CORRETTO: usa 'stato' direttamente
 
     try:
-        # Estrai il contenuto testuale e puliscilo dagli spazi
         stato_text = page.locator(SELECTOR_STATO_DATA).inner_text().strip()
         
-        # 1. PARTITA FINITA (F)
         if stato_text == "Finita":
-            stato_partita = 'F'
-            
-        # 2. PARTITA IN CORSO (IC)
-        # Copre stati come "Intervallo" o l'indicazione dei minuti giocati ("75'", "45+2'")
+            stato = 'F'
         elif stato_text == "Intervallo" or re.match(r'^\d+[\'\+]?$', stato_text):
-            stato_partita = 'IC'
-            
-        # 3. NON GIOCATA (NG)
-        # Se non è "Finita" o "In Corso", assumiamo che sia una data/orario futuro ("Oggi", "20:45", "Domani", "10/03").
+            stato = 'IC'
         else:
-            stato_partita = 'NG'
+            stato = 'NG'
             
     except Exception as e:
-        # Gestione di eventuali errori di locator (es. elemento non trovato)
-        # In caso di fallimento, l'ipotesi più sicura è che la partita non sia ancora iniziata.
-        print(f"⚠️ Errore nell'estrazione dello stato/data, default a NG: {e}")
-        stato_partita = 'NG' # Mantiene il default
-        
-    # Sostituisci la tua vecchia variabile 'stato' con 'stato_partita'
-    stato = stato_partita
-
-    # ===== DATA E ORA =====
+        print(f"⚠️ Errore nell'estrazione dello stato, default a NG: {e}")
+        stato = 'NG'
+    
+    # ===== DATA E ORA (SOLO SE NG) =====
     data = None
     ora = None
-
-    cest = pytz.timezone('Europe/Rome')
-
-    # ===== STATO (PRIMA DI DATA/ORA) =====
-    stato_partita = 'NG' 
-
-    try:
-        stato_text = page.locator(SELECTOR_STATO_DATA).inner_text().strip()
+    
+    if stato == 'NG':  # ✅ CORRETTO: usa 'stato'
+        cest = pytz.timezone('Europe/Rome')
         
-        if stato_text == "Finita":
-            stato_partita = 'F'
-        elif stato_text == "Intervallo" or re.match(r'^\d+[\'\+]?$', stato_text):
-            stato_partita = 'IC'
-        else:
-            stato_partita = 'NG'
-            
-    except Exception as e:
-        print(f"⚠️ Errore nell'estrazione dello stato/data, default a NG: {e}")
-        stato_partita = 'NG'
-
-    # ===== DATA =====
-    try:
-        if page.locator('span:has-text("Oggi")').count() > 0:
-            data = datetime.datetime.now(cest).strftime('%Y-%m-%d')
-        elif page.locator('span:has-text("Domani")').count() > 0:
-            data = (datetime.datetime.now(cest) + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
-        else:
-            date_spans = page.locator('span').all_text_contents()
-            for text in date_spans:
-                if re.match(r'\d{2}[/-]\d{2}[/-]\d{4}', text):
-                    parsed_date = datetime.datetime.strptime(text, '%d/%m/%Y') if '/' in text else datetime.datetime.strptime(text, '%d-%m-%Y')
-                    data = parsed_date.strftime('%Y-%m-%d')
-                    break
-    except:
-        pass
-
-    # ===== ORA (GESTIONE DIVERSA PER F/IC vs NG) =====
-    try:
-        if stato_partita in ['F', 'IC']:
-            # ✅ PER PARTITE FINITE/IN CORSO: Usa SELECTOR_ORA
-            ora_locator = page.locator(SELECTOR_ORA)
-            if ora_locator.count() > 0:
-                ora_text = ora_locator.first.inner_text().strip()
-                # Rimuovi eventuali spazi extra (es. "20 : 45" → "20:45")
-                ora_text = ora_text.replace(' ', '')
-                
-                if re.match(r'^\d{2}:\d{2}$', ora_text):
-                    ora_parsed = datetime.datetime.strptime(ora_text, '%H:%M')
-                    ora_corretta = ora_parsed + datetime.timedelta(hours=ORA_LEGALE_OFFSET)
-                    ora = ora_corretta.strftime('%H:%M') + ":00"
-        else:
-            # ✅ PER PARTITE NON GIOCATE: Cerca in tutti gli span
+        # DATA
+        try:
+            if page.locator('span:has-text("Oggi")').count() > 0:
+                data = datetime.datetime.now(cest).strftime('%Y-%m-%d')
+            elif page.locator('span:has-text("Domani")').count() > 0:
+                data = (datetime.datetime.now(cest) + datetime.timedelta(days=1)).strftime('%Y-%m-%d')
+            else:
+                date_spans = page.locator('span').all_text_contents()
+                for text in date_spans:
+                    if re.match(r'\d{2}[/-]\d{2}[/-]\d{4}', text):
+                        parsed_date = datetime.datetime.strptime(text, '%d/%m/%Y') if '/' in text else datetime.datetime.strptime(text, '%d-%m-%Y')
+                        data = parsed_date.strftime('%Y-%m-%d')
+                        break
+        except:
+            pass
+        
+        # ORA
+        try:
             time_spans = page.locator('span').all_text_contents()
             for text in time_spans:
                 text = text.strip()
@@ -489,40 +446,28 @@ def extract_match_basic_info(page):
                     ora_corretta = ora_parsed + datetime.timedelta(hours=ORA_LEGALE_OFFSET)
                     ora = ora_corretta.strftime('%H:%M') + ":00"
                     break
-    except Exception as e:
-        print(f"   ⚠️ Errore estrazione ora: {e}")
-        pass
-
-    # ✅ PRINT FORMATTATO (dopo estrazione data e ora)
-    if data and ora:
-        # Converti data da YYYY-MM-DD a DD-MM-YYYY per il print
-        data_display = datetime.datetime.strptime(data, '%Y-%m-%d').strftime('%d-%m-%Y')
-        # Converti ora da HH:MM:SS a HH:MM per il print
-        ora_display = ora[:5]  # Prende solo HH:MM
-        print(f"   📅 Data/Ora: {data_display} {ora_display}")
-    elif data:
-        data_display = datetime.datetime.strptime(data, '%Y-%m-%d').strftime('%d-%m-%Y')
-        print(f"   📅 Data: {data_display} | Ora: N/A")
-    elif ora:
-        ora_display = ora[:5]
-        print(f"   📅 Data: N/A | Ora: {ora_display}")
-
-    stato = stato_partita
+        except Exception as e:
+            print(f"   ⚠️ Errore estrazione ora: {e}")
+            pass
+        
+        # PRINT FORMATTATO (solo per NG)
+        if data and ora:
+            data_display = datetime.datetime.strptime(data, '%Y-%m-%d').strftime('%d-%m-%Y')
+            ora_display = ora[:5]
+            print(f"   📅 Data/Ora: {data_display} {ora_display}")
     
     # ===== GOAL (solo se F o IC) =====
     goalcasa = None
     goaltrasferta = None
     
-    if stato in ['F', 'IC']:
+    if stato in ['F', 'IC']:  # ✅ CORRETTO: usa 'stato'
         try:
-            # ✅ STRATEGIA 1: Usa all_text_contents() invece di inner_text()
+            # ✅ STRATEGIA 1: Usa all_text_contents()
             punteggio_locator = page.locator(SELECTOR_PUNTEGGIO_TOTALE)
             
             if punteggio_locator.count() > 0:
-                # Prendi TUTTI i testi degli elementi che matchano
                 all_texts = punteggio_locator.all_text_contents()
                 
-                # Cerca il pattern nei testi trovati
                 for punteggio_text in all_texts:
                     punteggio_text = punteggio_text.strip()
                     match = re.search(r'(\d+)\s*-\s*(\d+)', punteggio_text)
@@ -533,11 +478,10 @@ def extract_match_basic_info(page):
                         print(f"   ⚽ Goal estratti: {goalcasa} - {goaltrasferta}")
                         break
             
-            # ✅ STRATEGIA 2 (FALLBACK): Se strategia 1 fallisce, usa XPath più specifico
+            # ✅ STRATEGIA 2 (FALLBACK)
             if goalcasa is None or goaltrasferta is None:
                 print("   ⚠️  Tentativo strategia fallback per goal...")
                 
-                # Cerca span che contiene sia numero che trattino
                 score_xpath = "//span[contains(@class, 'textStyle_body') and contains(text(), '-')]"
                 score_elements = page.locator(f"xpath={score_xpath}").all_text_contents()
                 
@@ -549,11 +493,10 @@ def extract_match_basic_info(page):
                         print(f"   ⚽ Goal estratti (fallback): {goalcasa} - {goaltrasferta}")
                         break
             
-            # ✅ STRATEGIA 3 (ULTIMO FALLBACK): Cerca nei singoli span dei numeri
+            # ✅ STRATEGIA 3 (ULTIMO FALLBACK)
             if goalcasa is None or goaltrasferta is None:
                 print("   ⚠️  Tentativo strategia finale per goal...")
                 
-                # Prova a cercare gli score container specifici
                 score_spans = page.locator('div[class*="Box"] span[class*="textStyle"]').all_text_contents()
                 
                 numeri_trovati = []
@@ -562,7 +505,6 @@ def extract_match_basic_info(page):
                     if text.isdigit():
                         numeri_trovati.append(int(text))
                 
-                # Se troviamo almeno 2 numeri consecutivi, prendiamo i primi due
                 if len(numeri_trovati) >= 2:
                     goalcasa = numeri_trovati[0]
                     goaltrasferta = numeri_trovati[1]
@@ -575,9 +517,9 @@ def extract_match_basic_info(page):
     return {
         'casa': squadra_casa,
         'trasferta': squadra_trasferta,
-        'data': data,
-        'ora': ora,
-        'stato': stato,
+        'data': data,  # None se F/IC
+        'ora': ora,    # None se F/IC
+        'stato': stato,  # ✅ CORRETTO: usa 'stato'
         'gcasa': goalcasa,
         'gtrasferta': goaltrasferta
     }
@@ -910,18 +852,29 @@ def scrape_match(match_info, target_giornata, supabase):
             print("📋 Estrazione info base partita...")
             basic_info = extract_match_basic_info(page)
             
-            match_data = {
-                'id': match_info['id'],
-                'giornata': target_giornata,
-                'casa': basic_info['casa'],
-                'trasferta': basic_info['trasferta'],
-                'data': basic_info['data'],
-                'ora': basic_info['ora'],
-                'stato': basic_info['stato'],
-                'gcasa': basic_info['gcasa'],
-                'gtrasferta': basic_info['gtrasferta'],
-                'href': match_info['url']
-            }
+            # ✅ COSTRUISCI match_data IN BASE ALLO STATO
+            if basic_info['stato'] in ['F', 'IC']:
+                # ✅ PARTITA F/IC: Aggiorna SOLO stato e goal
+                match_data = {
+                    'id': match_info['id'],
+                    'stato': basic_info['stato'],
+                    'gcasa': basic_info['gcasa'],
+                    'gtrasferta': basic_info['gtrasferta']
+                }
+            else:
+                # ✅ PARTITA NG: Aggiorna tutto (prima volta)
+                match_data = {
+                    'id': match_info['id'],
+                    'giornata': target_giornata,
+                    'casa': basic_info['casa'],
+                    'trasferta': basic_info['trasferta'],
+                    'data': basic_info['data'],
+                    'ora': basic_info['ora'],
+                    'stato': basic_info['stato'],
+                    'gcasa': basic_info['gcasa'],
+                    'gtrasferta': basic_info['gtrasferta'],
+                    'href': match_info['url']
+                }
             
             print(f"   ✅ Casa: {basic_info['casa']}")
             print(f"   ✅ Trasferta: {basic_info['trasferta']}")
