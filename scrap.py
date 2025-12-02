@@ -17,7 +17,7 @@ import pytz
 # ==================== CONFIGURAZIONE GLOBALE ====================
 URL_TORNEO = 'https://www.sofascore.com/it/torneo/calcio/italy/serie-a/23#id:76457#tab:matches'
 CONSENT_BUTTON_SELECTOR = 'button:has-text("Acconsento"), button:has-text("Consent")'
-TARGET_GIORNATA = 12
+TARGET_GIORNATA = 14
 
 BUTTON_GIORNATA_SELECTOR = 'button.dropdown__button[aria-haspopup="listbox"]:has-text("Round"), button.dropdown__button[aria-haspopup="listbox"]:has-text("Giornata")'
 CONTAINER_GIORNATA_SELECTOR = 'div.card-component.mobile-only'
@@ -201,6 +201,54 @@ def get_locator_count(page, xpath_str):
     except:
         return 0
 
+def normalizza_nome_per_match(nome):
+    """
+    Normalizza un nome per il matching flessibile
+    Es: "H. W. Meister" → "meister"
+    Es: "Henrik Wendel Meister" → "meister"
+    """
+    if not nome:
+        return ""
+    
+    # Prendi solo il cognome (ultima parola)
+    parti = nome.split()
+    if parti:
+        cognome = parti[-1].lower()
+        # Rimuovi caratteri speciali
+        cognome = re.sub(r'[^\w\s]', '', cognome)
+        return cognome
+    return nome.lower()
+
+def trova_giocatore_in_campo(nome_evento, giocatori_in_campo):
+    """
+    Cerca un giocatore in campo usando matching flessibile
+    
+    Args:
+        nome_evento: Nome dal evento (es. "H. W. Meister")
+        giocatori_in_campo: Dict con tutti i giocatori
+    
+    Returns:
+        Nome chiave nel dict o None
+    """
+    nome_normalizzato = normalizza_nome_per_match(nome_evento)
+    
+    # 1. Match esatto
+    if nome_evento in giocatori_in_campo:
+        return nome_evento
+    
+    # 2. Match per cognome
+    for nome_campo in giocatori_in_campo.keys():
+        cognome_campo = normalizza_nome_per_match(nome_campo)
+        if cognome_campo == nome_normalizzato:
+            return nome_campo
+    
+    # 3. Match parziale (contiene)
+    for nome_campo in giocatori_in_campo.keys():
+        if nome_normalizzato in normalizza_nome_per_match(nome_campo):
+            return nome_campo
+    
+    return None
+
 # ==================== ESTRAZIONE PARTITE ====================
 
 def fetch_giornata_matches(target_giornata):
@@ -358,15 +406,6 @@ def fetch_giornata_matches(target_giornata):
 # ==================== ESTRAZIONE DATI PARTITA ====================
 
 def extract_match_basic_info(page):
-    """
-    Estrae squadre, data, ora, stato e goal usando Playwright locators
-    
-    Args:
-        page: Oggetto page di Playwright
-    
-    Returns:
-        Dict con info base della partita
-    """
     
     # ===== SQUADRE =====
     squadra_casa = None
@@ -551,67 +590,99 @@ def extract_eventi(page):
         
         for evento_elem in eventi_elements:
             try:
-                # Estrai minuto
+                # ===== ESTRAI MINUTO =====
                 minuto = ""
                 minuto_xpath = './/span[contains(@class, "textStyle_display.micro")]'
                 minuto_elements = evento_elem.xpath(minuto_xpath)
                 if minuto_elements:
                     minuto = minuto_elements[0].text_content().strip()
                 
-                # Estrai giocatori (primo span per il giocatore principale)
-                giocatore = ""
-                giocatore_xpath = './/span[contains(@class, "textStyle_body.medium") and contains(@class, "c_neutrals.nLv1")]'
-                giocatore_elements = evento_elem.xpath(giocatore_xpath)
-                if giocatore_elements:
-                    giocatore = giocatore_elements[0].text_content().strip()
-                
-                # Estrai tipo evento
-                tipo_xpath = './/span[contains(@class, "c_neutrals.nLv3")]'
-                tipo_elements = evento_elem.xpath(tipo_xpath)
-                tipo_testo = tipo_elements[0].text_content().strip() if tipo_elements else ""
-                
-                # Determina il tipo di evento
-                tipo = "ALTRO"
-                descrizione = giocatore
-                
-                # Controlla SVG title per determinare il tipo
+                # ===== ESTRAI SVG TITLE =====
                 svg_title_xpath = './/svg/title'
                 svg_titles = evento_elem.xpath(svg_title_xpath)
                 svg_text = " ".join([t.text_content() for t in svg_titles]).lower()
                 
-                if "gol" in svg_text or "goal" in svg_text:
+                # ===== ESTRAI NOMI (MARCATORE) - classe nLv1 =====
+                marcatore_xpath = './/span[contains(@class, "textStyle_body.medium") and contains(@class, "c_neutrals.nLv1")]'
+                marcatore_elements = evento_elem.xpath(marcatore_xpath)
+                marcatore = marcatore_elements[0].text_content().strip() if marcatore_elements else None
+                
+                # ===== ESTRAI ASSIST - classe nLv3 =====
+                assist_xpath = './/span[contains(@class, "textStyle_body.medium") and contains(@class, "c_neutrals.nLv3")]'
+                assist_elements = evento_elem.xpath(assist_xpath)
+                
+                # ===== DETERMINA TIPO EVENTO =====
+                tipo = "ALTRO"
+                descrizione = ""
+                
+                # 🎯 RIGORE SBAGLIATO
+                if "rigore sbagliato" in svg_text or "penalty missed" in svg_text:
+                    tipo = "❌ RIGORE SBAGLIATO"
+                    if marcatore:
+                        descrizione = marcatore
+                    # Cerca anche testo "Parato"
+                    for elem in assist_elements:
+                        testo = elem.text_content().strip().lower()
+                        if "parato" in testo:
+                            break
+                
+                # ⚽ GOL (include anche rigore segnato)
+                elif "gol" in svg_text or "goal" in svg_text or "rigore" in svg_text:
                     tipo = "⚽ GOL"
-                    # Cerca assistman
-                    assist_xpath = './/span[contains(text(), "Assist:")]'
-                    assist_elements = evento_elem.xpath(assist_xpath)
-                    if assist_elements:
-                        assist_text = assist_elements[0].text_content()
-                        assistman = assist_text.split("Assist:")[-1].strip()
-                        descrizione = f"{giocatore} (Assist: {assistman})"
-                
-                elif "giallo" in svg_text or "yellow" in svg_text:
-                    if "rosso" in svg_text or "red" in svg_text:
-                        tipo = "🟥 CARTELLINO"
+                    
+                    if not marcatore:
+                        continue
+                    
+                    # ✅ ESTRAI ASSISTMAN (se presente)
+                    assistman = None
+                    for elem in assist_elements:
+                        testo = elem.text_content().strip()
+                        # Verifica che non sia testo descrittivo
+                        if testo and not any(x in testo.lower() for x in ['parato', 'fuori', 'out', 'rigore', 'penalty', 'assist']):
+                            # Verifica che contenga lettere (probabile nome)
+                            if re.search(r'[A-Za-zÀ-ÿ]', testo):
+                                assistman = testo
+                                break
+                    
+                    # Costruisci descrizione
+                    if assistman:
+                        descrizione = f"{marcatore} (Assist: {assistman})"
                     else:
-                        tipo = "🟨 CARTELLINO"
-                    descrizione = giocatore
+                        descrizione = marcatore
+                    
+                    # 🎯 Aggiungi flag rigore se presente
+                    if "rigore" in svg_text or "penalty" in svg_text:
+                        descrizione = f"{descrizione} [Rigore]"
                 
+                # 🟨 CARTELLINO GIALLO
+                elif "giallo" in svg_text or "yellow" in svg_text:
+                    tipo = "🟨 CARTELLINO"
+                    if marcatore:
+                        descrizione = marcatore
+                
+                # 🟥 CARTELLINO ROSSO
                 elif "rosso" in svg_text or "red" in svg_text:
                     tipo = "🟥 CARTELLINO"
-                    descrizione = giocatore
+                    if marcatore:
+                        descrizione = marcatore
                 
-                elif "rigore sbagliato" in tipo_testo.lower() or "penalty missed" in tipo_testo.lower():
-                    tipo = "❌ RIGORE SBAGLIATO"
-                    descrizione = giocatore
-                
-                # Sostituzione (ha icona freccia e testo "Fuori:")
-                elif "fuori:" in tipo_testo.lower() or "out:" in tipo_testo.lower():
+                # 🔄 SOSTITUZIONE
+                elif any("fuori" in elem.text_content().lower() or "out" in elem.text_content().lower() for elem in assist_elements):
                     tipo = "🔄 SOSTITUZIONE"
-                    giocatore_fuori = tipo_testo.split(":")[-1].strip()
-                    descrizione = f"Esce: {giocatore_fuori}, Entra: {giocatore}"
+                    giocatore_entra = marcatore if marcatore else "Sconosciuto"
+                    giocatore_esce = "Sconosciuto"
+                    
+                    # Cerca chi esce (testo dopo "Fuori:")
+                    for elem in assist_elements:
+                        testo = elem.text_content().strip()
+                        if "fuori:" in testo.lower() or "out:" in testo.lower():
+                            giocatore_esce = testo.split(":")[-1].strip()
+                            break
+                    
+                    descrizione = f"Esce: {giocatore_esce}, Entra: {giocatore_entra}"
                 
-                # Aggiungi solo se tipo rilevante
-                if tipo != "ALTRO" and giocatore:
+                # ✅ Aggiungi solo se tipo rilevante
+                if tipo != "ALTRO" and descrizione:
                     eventi.append({
                         'tipo': tipo,
                         'descrizione': descrizione,
@@ -1054,37 +1125,74 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
             descrizione = evento['descrizione']
             
             if tipo == "⚽ GOL":
-                marcatore_match = re.search(r'(.+?)(?: \(Assist: .+\))?$', descrizione)
-                if marcatore_match:
-                    marcatore_nome = marcatore_match.group(1).strip()
-                    if marcatore_nome in giocatori_in_campo:
+                # ✅ ESTRAI MARCATORE E ASSISTMAN
+                descrizione_pulita = descrizione.replace('[Rigore]', '').strip()
+                
+                # Cerca pattern "Marcatore (Assist: Assistman)"
+                assist_match = re.search(r'^(.+?)\s*\(Assist:\s*(.+?)\)\s*$', descrizione_pulita)
+                
+                if assist_match:
+                    # GOL CON ASSIST
+                    marcatore_nome_evento = assist_match.group(1).strip()
+                    assistman_nome_evento = assist_match.group(2).strip()
+                    
+                    # ✅ USA MATCHING FLESSIBILE
+                    marcatore_nome = trova_giocatore_in_campo(marcatore_nome_evento, giocatori_in_campo)
+                    assistman_nome = trova_giocatore_in_campo(assistman_nome_evento, giocatori_in_campo)
+                    
+                    # ✅ GOAL AL MARCATORE
+                    if marcatore_nome:
                         giocatori_in_campo[marcatore_nome]['goal'] += 1
                         print(f"   ⚽ GOL: {marcatore_nome} (+3 bonus)")
-                
-                assist_match = re.search(r'\(Assist: (.+?)\)', descrizione)
-                if assist_match:
-                    assistman_nome = assist_match.group(1).strip()
-                    if assistman_nome in giocatori_in_campo:
+                    else:
+                        print(f"   ⚠️  GOL: {marcatore_nome_evento} (non trovato in campo)")
+                    
+                    # ✅ ASSIST ALL'ASSISTMAN (NON GOL!)
+                    if assistman_nome:
                         giocatori_in_campo[assistman_nome]['assist'] += 1
                         print(f"   🎯 ASSIST: {assistman_nome} (+1 bonus)")
+                    else:
+                        print(f"   ⚠️  ASSIST: {assistman_nome_evento} (non trovato in campo)")
+                else:
+                    # GOL SENZA ASSIST
+                    marcatore_nome_evento = descrizione_pulita.strip()
+                    marcatore_nome = trova_giocatore_in_campo(marcatore_nome_evento, giocatori_in_campo)
+                    
+                    if marcatore_nome:
+                        giocatori_in_campo[marcatore_nome]['goal'] += 1
+                        print(f"   ⚽ GOL: {marcatore_nome} (+3 bonus)")
+                    else:
+                        print(f"   ⚠️  GOL: {marcatore_nome_evento} (non trovato in campo)")
 
             elif tipo == "❌ RIGORE SBAGLIATO":
-                giocatore_nome = descrizione.strip()
-                if giocatore_nome in giocatori_in_campo:
+                giocatore_nome_evento = descrizione.strip()
+                giocatore_nome = trova_giocatore_in_campo(giocatore_nome_evento, giocatori_in_campo)
+                
+                if giocatore_nome:
                     giocatori_in_campo[giocatore_nome]['rigori sbagliati'] += 1
                     print(f"   ❌ RIGORE SBAGLIATO: {giocatore_nome} (-3 malus)")
+                else:
+                    print(f"   ⚠️  RIGORE SBAGLIATO: {giocatore_nome_evento} (non trovato in campo)")
                     
             elif tipo == "🟨 CARTELLINO":
-                giocatore_nome = descrizione.strip()
-                if giocatore_nome in giocatori_in_campo:
+                giocatore_nome_evento = descrizione.strip()
+                giocatore_nome = trova_giocatore_in_campo(giocatore_nome_evento, giocatori_in_campo)
+                
+                if giocatore_nome:
                     giocatori_in_campo[giocatore_nome]['gialli'] += 1
                     print(f"   🟨 GIALLO: {giocatore_nome} (-0.5 malus)")
+                else:
+                    print(f"   ⚠️  GIALLO: {giocatore_nome_evento} (non trovato in campo)")
             
             elif tipo == "🟥 CARTELLINO":
-                giocatore_nome = descrizione.strip()
-                if giocatore_nome in giocatori_in_campo:
+                giocatore_nome_evento = descrizione.strip()
+                giocatore_nome = trova_giocatore_in_campo(giocatore_nome_evento, giocatori_in_campo)
+                
+                if giocatore_nome:
                     giocatori_in_campo[giocatore_nome]['rossi'] += 1
                     print(f"   🟥 ROSSO: {giocatore_nome} (-1 malus)")
+                else:
+                    print(f"   ⚠️  ROSSO: {giocatore_nome_evento} (non trovato in campo)")
         
         # Finalizzazione
         print(f"\n📊 FANTAVOTI CALCOLATI")
@@ -1097,28 +1205,21 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                 # ✅ GESTIONE UNIFICATA DEL VOTO E CONVERSIONE A FLOAT
                 # ==========================================================
                 voto_grezzo = data['voto']
-                voto_per_calcolo = 0.0 # Default a 0.0 in caso di fallimento
-                voto_stampa = "SV"     # Default a SV per la stampa
+                voto_per_calcolo = 0.0
+                voto_stampa = "SV"
                 
                 try:
-                    # 1. Tenta la conversione a float del voto
-                    # Sostituiamo la virgola con il punto se necessario
                     voto_str = str(voto_grezzo).replace(',', '.') 
                     voto_float = float(voto_str)
                     
-                    # 2. Se la conversione è riuscita e il voto è sensato (tipicamente > 0)
                     if voto_float > 0:
                         voto_per_calcolo = voto_float
                         voto_stampa = f"{voto_float:.1f}"
-                    
-                    # 3. Se la conversione riesce, ma il voto è 0 (caso raro ma possibile)
                     else:
                          voto_per_calcolo = 0.0
                          voto_stampa = f"{voto_float:.1f}"
 
                 except (ValueError, TypeError):
-                    # Questo cattura None, "-", e qualsiasi altra stringa non numerica.
-                    # Manteniamo i default: voto_per_calcolo = 0.0 e voto_stampa = "SV"
                     pass 
                 
                 # ==========================================================
@@ -1133,7 +1234,7 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                     rossi = 1
                 
                 fvoto = calcola_fantavoto(
-                    voto=voto_per_calcolo, # 💡 USA IL VOTO PER CALCOLO (0.0 se SV/Errore)
+                    voto=voto_per_calcolo,
                     goal=data['goal'],
                     assist=data['assist'],
                     gialli=gialli,
@@ -1142,9 +1243,8 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                     is_top=data['top']
                 )
                 
-                # ✅ PRINT DETTAGLIATO (la logica rimane invariata)
+                # ✅ PRINT DETTAGLIATO
                 bonus_malus = []
-                # ... (tutta la logica di calcolo di bonus_str e top_str rimane invariata)
                 
                 if data['goal'] > 0:
                     bonus_malus.append(f"+{data['goal']*3} gol")
@@ -1156,15 +1256,11 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                     bonus_malus.append(f"-{rossi} rosso")
                 if data['rigori sbagliati'] > 0:
                     bonus_malus.append(f"-{data['rigori sbagliati']*3} rigori sbagliati")
-                if data['top'] == True:
-                    bonus_malus.append(f"")
                     
                 bonus_str = " | ".join(bonus_malus) if bonus_malus else "nessun bonus/malus"
-                top_str = "🏆 +1 TOP" if data['top'] else ""
+                top_str = " 🏆 +1 TOP" if data['top'] else ""
                 
-                # 💡 La stampa utilizza sempre la stringa voto_stampa.
-                # Se era un voto valido sarà "6.0", altrimenti "SV".
-                print(f"   {key:20s} | Voto: {voto_stampa:4s} → FV: {fvoto:.1f} | {bonus_str}{top_str}")
+                print(f"   {key:20s} | Voto: {voto_stampa:4s} → FV: {fvoto:.1f} | {bonus_str}{top_str}")
                 
                 payload = {
                     'IDpartita': data['IDpartita'],
@@ -1174,7 +1270,7 @@ def processa_eventi_e_voti(all_match_data, giocatori_mapping):
                     'assist': data['assist'],
                     'gialli': gialli,
                     'rossi': rossi,
-                    'voto': voto_per_calcolo, # 💡 SALVA 0.0 se SV/Errore
+                    'voto': voto_per_calcolo,
                     'fvoto': fvoto,
                     'titolare': data['titolare'],
                     'top': data['top']
