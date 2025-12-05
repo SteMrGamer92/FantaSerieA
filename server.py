@@ -547,9 +547,9 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=port, debug=False)
 
 # ===== VALUTE - LETTURA =====
-@app.route('/api/utenti/<int:user_id>/currencies', methods=['GET'])
+@app.route('/api/utenti/<int:user_id>/crediti', methods=['GET'])
 @require_api_key
-def get_user_currencies(user_id):
+def get_user_credits(user_id):
     """Recupera crediti e crediti_scommesse di un utente"""
     try:
         currencies = db_reader.get_user_currencies(user_id)
