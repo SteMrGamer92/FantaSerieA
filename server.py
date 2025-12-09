@@ -552,7 +552,7 @@ if __name__ == '__main__':
 def get_user_credits(user_id):
     """Recupera crediti e crediti_scommesse di un utente"""
     try:
-        currencies = db_reader.get_user_currencies(user_id)
+        currencies = db_reader.get_user_credits(user_id)
         
         if currencies is not None:
             return jsonify({
