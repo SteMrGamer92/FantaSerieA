@@ -234,7 +234,7 @@ class DatabaseReader:
             
             # 2. Prendi tutti i giocatori
             query = self.client.table('Giocatori').select(
-                'id, nome, squadra, ruolo, goal, assist, prezzo, mediavoto, mediafvoto, partite_giocate'
+                'id, nome, squadra, ruolo, goal, assist, prezzo, mediavoto, mediafvoto, npartite'
             )
             
             # 3. Escludi quelli già posseduti
@@ -279,7 +279,7 @@ class DatabaseReader:
             
             # 3. Prendi i dettagli completi dei giocatori
             response = self.client.table('Giocatori').select(
-                'id, nome, squadra, ruolo, goal, assist, prezzo, mediavoto, mediafvoto, partite_giocate'
+                'id, nome, squadra, ruolo, goal, assist, prezzo, mediavoto, mediafvoto, npartite'
             ).not_.in_('id', player_ids).execute()
             
             if not response.data:
@@ -300,12 +300,12 @@ class DatabaseReader:
 
     def get_user_credits(self, user_id: int) -> Optional[Dict[str, float]]:
         try:
-            response = self.client.table('Utenti').select('crediti, crediti_scommesse').eq('id', user_id).single().execute()
+            response = self.client.table('Utenti').select('crediti, crediti_scom').eq('id', user_id).single().execute()
             
             if response.data:
                 return {
                     'crediti': response.data.get('crediti', 0) or 0,
-                    'crediti_scommesse': response.data.get('crediti_scommesse', 0) or 0
+                    'crediti_scommesse': response.data.get('crediti_scom', 0) or 0
                 }
             return None
         except Exception as e:
