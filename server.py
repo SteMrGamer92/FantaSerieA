@@ -557,7 +557,7 @@ def get_user_credits(user_id):
         if currencies is not None:
             return jsonify({
                 'success': True,
-                'data': currencies
+                'data': {'crediti': currencies.get('crediti', 0)}
             })
         
         return jsonify({
@@ -566,6 +566,7 @@ def get_user_credits(user_id):
         }), 404
         
     except Exception as e:
+        print(f"Errore get_user_credits: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ===== VALUTE - CONVERSIONE =====
@@ -683,6 +684,7 @@ def save_formazione():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
     
+
 
 
 
