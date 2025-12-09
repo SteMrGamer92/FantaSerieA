@@ -289,7 +289,7 @@ class DatabaseReader:
             rosa_dict = {row['IDgiocatore']: row['prezzo'] for row in rosa_response.data}
             
             result = []
-            for player in players_response.data:
+            for player in response.data:
                 player['prezzo_acquisto'] = rosa_dict.get(player['id'], 1.0)
                 result.append(player)
             
