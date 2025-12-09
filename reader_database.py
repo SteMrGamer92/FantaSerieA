@@ -280,9 +280,9 @@ class DatabaseReader:
             # 3. Prendi i dettagli completi dei giocatori
             response = self.client.table('Giocatori').select(
                 'id, nome, nomebreve, squadra, ruolo, goal, assist, prezzo, media_voto, fanta_media, partite_giocate'
-            ).not_.in_('id', owned_ids).execute()
+            ).not_.in_('id', player_ids).execute()
             
-            if not players_response.data:
+            if not response.data:
                 return []
             
             # 4. Combina i dati (aggiungi il prezzo di acquisto)
@@ -298,7 +298,7 @@ class DatabaseReader:
             print(f"Errore get_user_rosa: {e}")
             return []
 
-    def get_user_currencies(self, user_id: int) -> Optional[Dict[str, float]]:
+    def get_user_credits(self, user_id: int) -> Optional[Dict[str, float]]:
         try:
             response = self.client.table('Utenti').select('crediti, crediti_scommesse').eq('id', user_id).single().execute()
             
