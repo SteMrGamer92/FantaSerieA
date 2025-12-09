@@ -234,7 +234,7 @@ class DatabaseReader:
             
             # 2. Prendi tutti i giocatori
             query = self.client.table('Giocatori').select(
-                'id, nome, squadra, ruolo, goal, assist, prezzo, media_voto, fanta_media, partite_giocate'
+                'id, nome, squadra, ruolo, goal, assist, prezzo, mediavoto, mediafvoto, partite_giocate'
             )
             
             # 3. Escludi quelli già posseduti
@@ -279,7 +279,7 @@ class DatabaseReader:
             
             # 3. Prendi i dettagli completi dei giocatori
             response = self.client.table('Giocatori').select(
-                'id, nome, squadra, ruolo, goal, assist, prezzo, media_voto, fanta_media, partite_giocate'
+                'id, nome, squadra, ruolo, goal, assist, prezzo, mediavoto, mediafvoto, partite_giocate'
             ).not_.in_('id', player_ids).execute()
             
             if not response.data:
