@@ -1431,6 +1431,30 @@ def main():
     print(f"   • Non giocate (NG): {partite_non_giocate}")
     print(f"📊 Record Statistiche caricati: {len(statistiche_per_supabase)}")
     print(f"{'='*80}\n")
+  
+    # Fase 4: Esecuzione query automatiche
+    print(f"\n{'='*80}")
+    print(f"FASE 4: ESECUZIONE QUERY AUTOMATICHE")
+    print(f"{'='*80}")
+  
+    try:
+        # 1. Update Statistiche
+        print("🔄 Esecuzione query: Update Statistiche...")
+        supabase.rpc('update_statistiche').execute()
+        print("✅ Query 'Update Statistiche' completata")
+        
+        # 2. Update Prezzo
+        print("🔄 Esecuzione query: Update Prezzo...")
+        supabase.rpc('update_prezzo').execute()
+        print("✅ Query 'Update Prezzo' completata")
+        
+        print(f"{'='*80}")
+        print("✅ TUTTE LE QUERY AUTOMATICHE COMPLETATE!")
+        print(f"{'='*80}\n")
+        
+    except Exception as e:
+        print(f"❌ Errore durante l'esecuzione delle query: {e}")
+        traceback.print_exc()
 
 if __name__ == "__main__":
     try:
@@ -1440,3 +1464,4 @@ if __name__ == "__main__":
         traceback.print_exc()
         import sys
         sys.exit(1)
+
