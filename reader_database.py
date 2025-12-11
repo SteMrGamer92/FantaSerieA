@@ -239,7 +239,7 @@ class DatabaseReader:
             
             # 3. Escludi quelli già posseduti
             if owned_ids:
-                query = query.not_.in_('id', owned_ids)
+                query = query.in_('id', owned_ids)
             
             response = query.execute()
             
