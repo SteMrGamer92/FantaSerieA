@@ -683,3 +683,53 @@ def save_formazione():
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+# ===== MERCATO - CARRELLO (TRANSAZIONI MULTIPLE) =====
+@app.route('/api/mercato/carrello', methods=['POST'])
+@require_api_key
+def process_cart():
+    """
+    Processa tutte le transazioni del carrello in un'unica operazione
+    Riduce le chiamate al server e garantisce atomicità
+    """
+    try:
+        data = request.get_json()
+        
+        # Validazione campi obbligatori
+        if not data.get('user_id') or not data.get('transactions'):
+            return jsonify({
+                'success': False,
+                'error': 'user_id e transactions obbligatori'
+            }), 400
+        
+        user_id = data['user_id']
+        transactions = data['transactions']
+        
+        acquisti = transactions.get('acquisti', [])
+        vendite = transactions.get('vendite', [])
+        
+        if len(acquisti) == 0 and len(vendite) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'Carrello vuoto'
+            }), 400
+        
+        # Esegui tutte le transazioni
+        success = db_writer.process_cart_transactions(user_id, acquisti, vendite)
+        
+        if success:
+            totale_acquisti = len(acquisti)
+            totale_vendite = len(vendite)
+            
+            return jsonify({
+                'success': True,
+                'message': f'{totale_acquisti} acquisti, {totale_vendite} vendite completate'
+            }), 200
+        
+        return jsonify({
+            'success': False, 
+            'error': 'Errore durante le transazioni'
+        }), 500
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
