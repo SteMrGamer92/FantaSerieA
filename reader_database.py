@@ -27,10 +27,21 @@ class DatabaseReader:
             return []
     
     def get_all_players(self) -> List[Dict[str, Any]]:
-        """Recupera tutti i giocatori disponibili"""
+        """Recupera TUTTI i giocatori con TUTTI i campi"""
         try:
-            response = self.client.table('Giocatori').select('*').execute()
-            return response.data if response.data else []
+            response = self.client.table('Giocatori').select(
+                'id, nome, nomebreve, squadra, ruolo, goal, assist, prezzo, '
+                'media_voto, fanta_media, partite_giocate, ammonizioni, '
+                'espulsioni, rigori_sbagliati, ntop'
+            ).execute()
+            
+            if response.data:
+                # Imposta prezzo a 1 se non presente
+                for player in response.data:
+                    if player.get('prezzo') is None:
+                        player['prezzo'] = 1.0
+                return response.data
+            return []
         except Exception as e:
             print(f"Errore get_all_players: {e}")
             return []

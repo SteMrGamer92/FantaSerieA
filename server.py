@@ -115,8 +115,8 @@ def get_squadra_utente(username):
 # ===== GIOCATORI (LETTURA) =====
 @app.route('/api/giocatori', methods=['GET'])
 @require_api_key
-def get_giocatori():
-    """Recupera tutti i giocatori"""
+def get_all_giocatori():
+    """Recupera TUTTI i giocatori (per cache client)"""
     try:
         giocatori = db_reader.get_all_players()
         return jsonify({
